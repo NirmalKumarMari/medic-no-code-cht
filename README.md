@@ -1,6 +1,6 @@
 # Vera
 
-**No-code CHT configuration for health ministries.** Vera turns a public clinical guideline, or a plain-language change request, into tested, approved [Community Health Toolkit](https://communityhealthtoolkit.org) (CHT) configuration. AI drafts and flags. Code builds and tests. Humans approve twice.
+**No-code CHT configuration for health ministries.** Vera turns a public clinical guideline, or a plain-language change request, into tested, approved [Community Health Toolkit](https://communityhealthtoolkit.org) (CHT) configuration. 
 
 Built for [Medic](https://medic.org) at AWS Breaking Barriers 2026 (Seattle, Open path).
 
