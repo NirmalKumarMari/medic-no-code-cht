@@ -1,0 +1,97 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 980 820' width='980' height='820'>
+<defs><marker id='a' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'><path d='M2 1L8 5L2 9' fill='none' stroke='context-stroke' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></marker></defs>
+<rect width='980' height='820' fill='#FFFFFF'/>
+<text x='20' y='26' font-family='Helvetica, Arial, sans-serif' font-size='16' font-weight='700' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>Vera: AI drafts and flags, code builds and tests, humans approve twice</text>
+<rect x='20' y='48' width='14' height='14' rx='3' fill='#EEEDFE' stroke='#534AB7' stroke-width='1'/>
+<text x='40' y='55' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>AI agent (EC2 container)</text>
+<rect x='220' y='48' width='14' height='14' rx='3' fill='#FFFFFF' stroke='#B4B2A9' stroke-width='1'/>
+<text x='240' y='55' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>Code (EC2)</text>
+<rect x='330' y='48' width='14' height='14' rx='3' fill='#FAECE7' stroke='#993C1D' stroke-width='1'/>
+<text x='350' y='55' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>Human approval</text>
+<rect x='480' y='48' width='14' height='14' rx='3' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='500' y='55' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>Managed AWS service</text>
+<text x='690' y='55' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#5F5E5A' text-anchor='start' dominant-baseline='central'>Dashed border = Should-have</text>
+<rect x='20' y='80' width='940' height='500' rx='16' fill='#F1EFE8' stroke='#888780' stroke-width='1'/>
+<text x='40' y='100' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>AWS Step Functions runs every step in this order</text>
+<text x='50' y='152.0' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#5F5E5A' text-anchor='middle' transform='rotate(-90 50 152.0)'>Edit</text>
+<text x='50' y='262.0' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#5F5E5A' text-anchor='middle' transform='rotate(-90 50 262.0)'>Draft</text>
+<text x='50' y='382.0' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#5F5E5A' text-anchor='middle' transform='rotate(-90 50 382.0)'>Build</text>
+<text x='50' y='502.0' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#5F5E5A' text-anchor='middle' transform='rotate(-90 50 502.0)'>Release</text>
+<rect x='755' y='120' width='195' height='64' rx='8' fill='#EEEDFE' stroke='#534AB7' stroke-width='1'/>
+<text x='852.5' y='142.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#3C3489' text-anchor='middle' dominant-baseline='central'>Change planner agent</text>
+<text x='852.5' y='162.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#534AB7' text-anchor='middle' dominant-baseline='central'>Plain-language edit to plan</text>
+<text x='743' y='152.0' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#5F5E5A' text-anchor='end' dominant-baseline='central'>Edit an existing form: new snapshot enters at logic checks</text>
+<rect x='80' y='230' width='195' height='64' rx='8' fill='#EEEDFE' stroke='#534AB7' stroke-width='1'/>
+<text x='177.5' y='252.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#3C3489' text-anchor='middle' dominant-baseline='central'>1. Intake agent</text>
+<text x='177.5' y='272.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#534AB7' text-anchor='middle' dominant-baseline='central'>Request into structured spec</text>
+<rect x='305' y='230' width='195' height='64' rx='8' fill='#EEEDFE' stroke='#534AB7' stroke-width='1'/>
+<text x='402.5' y='252.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#3C3489' text-anchor='middle' dominant-baseline='central'>2. Drafting agent</text>
+<text x='402.5' y='272.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#534AB7' text-anchor='middle' dominant-baseline='central'>Logic + citations + flags</text>
+<rect x='530' y='230' width='195' height='64' rx='8' fill='#EEEDFE' stroke='#534AB7' stroke-width='1' stroke-dasharray='5 4'/>
+<text x='627.5' y='252.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#3C3489' text-anchor='middle' dominant-baseline='central'>3. Cross-check agent</text>
+<text x='627.5' y='272.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#534AB7' text-anchor='middle' dominant-baseline='central'>Other model family</text>
+<rect x='755' y='230' width='195' height='64' rx='8' fill='#FFFFFF' stroke='#B4B2A9' stroke-width='1'/>
+<text x='852.5' y='252.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#2C2C2A' text-anchor='middle' dominant-baseline='central'>4. Logic checks</text>
+<text x='852.5' y='272.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>Branches, ~12 golden cases</text>
+<path d='M275 262.0 H303' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M500 262.0 H528' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M725 262.0 H753' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M852.5 184 V228' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<rect x='755' y='350' width='195' height='64' rx='8' fill='#FAECE7' stroke='#993C1D' stroke-width='1'/>
+<text x='852.5' y='372.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#712B13' text-anchor='middle' dominant-baseline='central'>5. Content approval</text>
+<text x='852.5' y='392.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#993C1D' text-anchor='middle' dominant-baseline='central'>Clinician; binds snapshotHash</text>
+<rect x='530' y='350' width='195' height='64' rx='8' fill='#FFFFFF' stroke='#B4B2A9' stroke-width='1'/>
+<text x='627.5' y='372.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#2C2C2A' text-anchor='middle' dominant-baseline='central'>6. Compiler</text>
+<text x='627.5' y='392.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>XLSForm, tasks.js</text>
+<rect x='305' y='350' width='195' height='64' rx='8' fill='#FFFFFF' stroke='#B4B2A9' stroke-width='1'/>
+<text x='402.5' y='372.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#2C2C2A' text-anchor='middle' dominant-baseline='central'>7. Build and test</text>
+<text x='402.5' y='392.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>No network, synthetic patients</text>
+<path d='M822.5 294 V348' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M882.5 350 V296' fill='none' stroke='#993C1D' stroke-width='1.25' stroke-dasharray='5 4' marker-end='url(#a)'/>
+<text x='812' y='322.0' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#712B13' text-anchor='end' dominant-baseline='central'>reject: new snapshot</text>
+<path d='M755 382.0 H727' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M530 382.0 H502' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<rect x='305' y='470' width='195' height='64' rx='8' fill='#EEEDFE' stroke='#534AB7' stroke-width='1' stroke-dasharray='5 4'/>
+<text x='402.5' y='492.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#3C3489' text-anchor='middle' dominant-baseline='central'>8. History check</text>
+<text x='402.5' y='512.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#534AB7' text-anchor='middle' dominant-baseline='central'>Advisory flags for IT</text>
+<rect x='530' y='470' width='195' height='64' rx='8' fill='#FAECE7' stroke='#993C1D' stroke-width='1'/>
+<text x='627.5' y='492.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#712B13' text-anchor='middle' dominant-baseline='central'>9. Deploy approval</text>
+<text x='627.5' y='512.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#993C1D' text-anchor='middle' dominant-baseline='central'>IT lead: diff, tests, flags</text>
+<rect x='755' y='470' width='195' height='64' rx='8' fill='#FFFFFF' stroke='#B4B2A9' stroke-width='1'/>
+<text x='852.5' y='492.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#2C2C2A' text-anchor='middle' dominant-baseline='central'>10. Deployer</text>
+<text x='852.5' y='512.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>Separate role, upload + verify</text>
+<path d='M402.5 414 V468' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<text x='410.5' y='442.0' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#5F5E5A' text-anchor='start' dominant-baseline='central'>tests pass</text>
+<path d='M500 502.0 H528' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<path d='M725 502.0 H753' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<text x='20' y='606' font-family='Helvetica, Arial, sans-serif' font-size='13' font-weight='700' fill='#2C2C2A' text-anchor='start' dominant-baseline='central'>Shared services</text>
+<rect x='80' y='625' width='205' height='120' rx='8' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='182.5' y='658.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#085041' text-anchor='middle' dominant-baseline='central'>AgentCore</text>
+<text x='182.5' y='678.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Gateway, Policy (Cedar),</text>
+<text x='182.5' y='695.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Identity, Observability</text>
+<text x='182.5' y='712.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Agents reach tools only here</text>
+<rect x='300' y='625' width='170' height='120' rx='8' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='385.0' y='658.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#085041' text-anchor='middle' dominant-baseline='central'>Bedrock</text>
+<text x='385.0' y='678.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Models, Guardrails,</text>
+<text x='385.0' y='695.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Knowledge Base</text>
+<text x='385.0' y='712.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>on S3 Vectors</text>
+<rect x='485' y='625' width='150' height='120' rx='8' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='560.0' y='667.0' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#085041' text-anchor='middle' dominant-baseline='central'>DynamoDB + S3</text>
+<text x='560.0' y='687.0' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Snapshots, approvals,</text>
+<text x='560.0' y='704.0' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>fingerprints, audit</text>
+<rect x='690' y='625' width='115' height='120' rx='8' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='747.5' y='667.0' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#085041' text-anchor='middle' dominant-baseline='central'>AgentCore</text>
+<text x='747.5' y='687.0' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Memory: past</text>
+<text x='747.5' y='704.0' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>decisions</text>
+<path d='M635 685.0 H688' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<text x='661' y='661.0' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>memory</text>
+<text x='661' y='675.0' font-family='Helvetica, Arial, sans-serif' font-size='11.5' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>writer</text>
+<rect x='820' y='625' width='140' height='52' rx='8' fill='#F1EFE8' stroke='#888780' stroke-width='1'/>
+<text x='890.0' y='641.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#2C2C2A' text-anchor='middle' dominant-baseline='central'>CHT instance</text>
+<text x='890.0' y='661.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#5F5E5A' text-anchor='middle' dominant-baseline='central'>then phones sync</text>
+<rect x='820' y='691' width='140' height='54' rx='8' fill='#E1F5EE' stroke='#0F6E56' stroke-width='1'/>
+<text x='890.0' y='708.5' font-family='Helvetica, Arial, sans-serif' font-size='14' font-weight='700' fill='#085041' text-anchor='middle' dominant-baseline='central'>Secrets Manager</text>
+<text x='890.0' y='728.5' font-family='Helvetica, Arial, sans-serif' font-size='12' font-weight='400' fill='#0F6E56' text-anchor='middle' dominant-baseline='central'>Deployer role only</text>
+<path d='M892.5 534 V623' fill='none' stroke='#5F5E5A' stroke-width='1.25' marker-end='url(#a)'/>
+<text x='490' y='790' font-family='Helvetica, Arial, sans-serif' font-size='12' fill='#5F5E5A' text-anchor='middle'>Both approvals are written to DynamoDB + S3 by Step Functions, never by an agent. CHW phones run standard offline CHT config with no AI.</text>
+</svg>
