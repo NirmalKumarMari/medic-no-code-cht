@@ -147,3 +147,13 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Storage infrastructure outputs and local ingestion receipts
+node_modules/
+cdk.out/
+outputs.json
+.env*
+!.env.example
+coverage/
+
+publications.json

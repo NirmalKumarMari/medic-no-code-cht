@@ -245,3 +245,7 @@ Team Vera, AWS Breaking Barriers 2026, Seattle.
 ## License
 
 [AGPL-3.0](LICENSE), compatible with Medic's open-source tools.
+
+## Artifact storage and retrieval implementation
+
+The `database` branch adds TypeScript CDK infrastructure, versioned artifact helpers, screened ingestion, and a cited retrieval adapter. See [storage setup, deployment, validation, and teardown](docs/STORAGE.md) and the [integration handoff](docs/HANDOFF.md). Local tests and synthesis pass; live deployment and retrieval verification require configured AWS access.
