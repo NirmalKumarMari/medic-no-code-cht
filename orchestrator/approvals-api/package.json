@@ -1,0 +1,28 @@
+{
+  "name": "@medic-nocode/approvals-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Completes Step Functions task tokens once a human approves or rejects. The only place SendTaskSuccess/SendTaskFailure is called from — no agent and no Lambda glue ever touches these.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "node --test --import tsx test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-sfn": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "fastify": "^5.0.0",
+    "ulid": "^2.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
