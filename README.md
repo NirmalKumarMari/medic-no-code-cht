@@ -4,8 +4,6 @@
 
 Built for [Medic](https://medic.org) at AWS Breaking Barriers 2026 (Seattle, Open path).
 
-![Vera architecture](docs/architecture.png)
-
 ---
 
 ## Why Vera exists
