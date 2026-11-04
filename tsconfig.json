@@ -3,7 +3,6 @@
   "references": [
     { "path": "./schemas" },
     { "path": "./agents/drafting" },
-    { "path": "./agents/history-check" },
     { "path": "./agents/intake-agent" },
     { "path": "./packages/artifact-storage" },
     { "path": "./packages/workflow-data" }
