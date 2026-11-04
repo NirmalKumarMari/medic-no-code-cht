@@ -13,14 +13,13 @@ npm ci
 docker compose up -d
 npm run build
 npm test
-npm run synth
 ```
 
 Tests are restricted to DynamoDB Local on a loopback endpoint (`http://127.0.0.1:18000` by default). They use synthetic data and a fake Step Functions transport. They do not access AWS, CHT or real clinical data. `docker compose down` stops this package's disposable local container. Local tests cover repository transactions; they do not establish correctness of clinical rules, compiler output, Cognito integration or real Step Functions callbacks.
 
 ## Infrastructure and deployment
 
-`infra/app.ts` synthesizes exactly four tables and no IAM resources:
+All CDK infrastructure now lives in the repository-root [infra/](../../infra/README.md). Its `workflow-data-stack.ts` module synthesizes exactly four tables and no IAM resources. This package contains runtime code only; install root dependencies before running infrastructure commands. The package-level `npm run synth` forwards to the root app for compatibility.
 
 | Table | Purpose | Keys and indexes |
 |---|---|---|
@@ -31,13 +30,14 @@ Tests are restricted to DynamoDB Local on a loopback endpoint (`http://127.0.0.1
 
 All tables use on-demand capacity, AWS-managed encryption, point-in-time recovery, deletion protection and CloudFormation retention. Required approval/audit history has no TTL. Only a successfully delivered token record gets `cleanupAt`; its raw token is removed immediately in the delivery transaction. TTL is cleanup, never authorization or expiry enforcement.
 
-Use an existing authorized AWS session or EC2 role, not committed access keys:
+Use an existing authorized AWS session or EC2 role, not committed access keys. Run infrastructure commands from the **repository root**:
 
 ```sh
+npm ci
 npm run synth
-aws cloudformation validate-template --template-body file://.artifacts/vera-workflow-data.template.json --region us-west-2
-aws cloudformation deploy --template-file .artifacts/vera-workflow-data.template.json --stack-name vera-workflow-data --region us-west-2 --no-fail-on-empty-changeset
-ALLOW_AWS_SMOKE=1 AWS_REGION=us-west-2 npm run smoke:aws
+aws cloudformation validate-template --template-body file://cdk.out/vera-workflow-data.template.json --region us-west-2
+aws cloudformation deploy --template-file cdk.out/vera-workflow-data.template.json --stack-name vera-workflow-data --region us-west-2 --no-fail-on-empty-changeset
+ALLOW_AWS_SMOKE=1 AWS_REGION=us-west-2 npm --prefix packages/workflow-data run smoke:aws
 ```
 
 The explicit AWS smoke probe creates four clearly labeled synthetic `PROBE` rows, checks cross-table atomic writes, rejects an overwrite and verifies transaction rollback. It retains these small rows for traceability. They are not clinical approvals, live workflow state, callback tokens or release evidence. Prefix/stack names can be overridden with `WORKFLOW_TABLE_PREFIX`/`WORKFLOW_STACK_NAME` before synthesis. Keep deployed table names consistent with runtime configuration.
@@ -104,4 +104,4 @@ UI reads are tenant-scoped: `getChange`, `getSnapshot`, `listInbox`, `listDecisi
 
 ## Dependency check
 
-Runtime dependencies pass `npm audit --omit=dev`. The current CDK development dependency bundles a `minimatch` version with moderate advisory [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). It is used only for local template synthesis; no untrusted glob input is accepted, and CDK is omitted from production installs. Track the upstream fix. Do not report a clean full development dependency audit.
+Runtime dependencies pass `npm audit --omit=dev`. CDK dependencies now belong only to the repository root. The root CDK development dependency bundles a `minimatch` version with moderate advisory [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). It is used only for local template synthesis; no untrusted glob input is accepted, and CDK is omitted from production installs. Track the upstream fix. Do not report a clean full development dependency audit.

@@ -16,6 +16,8 @@ A `cht-primer` is a reviewed, versioned few paragraphs curated for the selected 
 
 ## Infrastructure
 
+All CDK definitions now share the root [infra/](../infra/README.md) folder and entry point. Storage and workflow-data remain separate stacks, so they can be deployed independently. `npm run synth` generates both templates under `cdk.out/`; `npm run deploy` explicitly selects storage only.
+
 `infra/storage-stack.ts` keeps the logical IDs `Artifacts` and `StorageKey` to retain existing artifact identities. Outputs: `ArtifactBucket`, `KmsKeyArn`, `SourceWriterRoleArn`, `PromptContextWorkerRoleArn`, `ArtifactWorkerRoleArn`, `GuardrailId`, `GuardrailVersion`. No KB/vector IDs are output.
 
 Source writer: `docs/*` publication. Prompt-context worker: versioned `docs/*` reads and `reports/*/context/*` writes. Artifact worker: snapshot/proposal/build/report writes, source reads, and artifact version listing. All use scoped KMS and screening permissions. Agents receive an explicit deny for bucket access and service-role assumption. This stack does not implement Cognito, DynamoDB permissions, Gateway/Cedar, instance profiles or runtime credential isolation. Never share a host service role with agents; offline build containers get staged read-only bytes and no credentials.

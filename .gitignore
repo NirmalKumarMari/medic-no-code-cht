@@ -157,3 +157,6 @@ outputs.json
 coverage/
 
 publications.json
+
+# Unified infrastructure deployment outputs
+workflow-outputs.json

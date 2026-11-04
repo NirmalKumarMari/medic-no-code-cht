@@ -25,8 +25,9 @@ Rule history hashes structural `when` + `then` + optional `followUp`, normalizin
 
 ## Implemented modules
 
-- Root `src/`, `infra/`, `tests/`: artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).
-- [packages/workflow-data](packages/workflow-data/README.md): four-table infrastructure/repositories, fingerprint history, human decisions and callback recovery. [Status](packages/workflow-data/docs/STATUS.md), [integration contract](packages/workflow-data/docs/INTEGRATION.md).
+- Root `src/`, `tests/`: artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).
+- [infra/](infra/README.md): one CDK app with separate storage and workflow-data stack modules. All infrastructure definitions and CDK dependencies live at the repository root.
+- [packages/workflow-data](packages/workflow-data/README.md): four-table runtime repositories, fingerprint history, human decisions and callback recovery. [Status](packages/workflow-data/docs/STATUS.md), [integration contract](packages/workflow-data/docs/INTEGRATION.md).
 
 These are libraries/IaC and an internal callback worker. The UI, Cognito verifier, live state machine, model prompt/cache integration, compiler/harness and CHT deployment adapter must be connected by their owners. Local tests are not proof of a deployed end-to-end clinical workflow. The final pathway, real guideline, clinician-reviewed golden cases and real curated primer remain team decisions. Existing public sample files are optional development fixtures, not finalized clinical inputs.
 
@@ -44,14 +45,15 @@ npm ci
 docker compose up -d
 npm run build
 npm test
-npm run synth
 ```
+
+Root `npm run synth` generates both templates in `cdk.out/`. Root tests cover both stacks; the workflow package's `synth` command forwards to the same root app for compatibility.
 
 The package's DynamoDB tests use loopback-only synthetic local state. No command above publishes sources, seeds AWS/CHT or invokes models. Source and artifact SDK clients are stubbed in the root tests. See each module's documentation for explicit opt-in deployment. Keep offline build containers credential-free and separate from the deploy role. All resources use the project's AWS `us-west-2` environment and tag conventions.
 
 ## Deployment and retention
 
-The four workflow tables were deployed and storage-smoke-verified on November 3 (receipts are in the workflow package). Source storage/screens/roles remain a separate stack; live migration status is documented in [the revision note](docs/DATABASE_REVISION_2026-11-04.md). Never apply an old stack template that recreates the removed infrastructure.
+The four workflow tables were deployed and storage-smoke-verified on November 3 (receipts are in the workflow package). The single `infra/` folder keeps source storage/screens/roles and workflow tables in independently deployable stacks with their original names and logical IDs; live migration status is documented in [the revision note](docs/DATABASE_REVISION_2026-11-04.md). Never apply an old stack template that recreates the removed infrastructure.
 
 Both IaC stacks retain durable stores by default. A stack delete is **not** complete data teardown. Review exports/retention and exact resources before any explicit destructive cleanup. EC2/CHT resources are managed separately from these modules.
 

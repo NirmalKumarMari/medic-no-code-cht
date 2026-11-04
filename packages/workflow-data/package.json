@@ -15,14 +15,13 @@
   },
   "files": [
     "dist",
-    "infra",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 test/integration.test.ts",
-    "synth": "tsx infra/app.ts",
+    "synth": "npm --prefix ../.. run synth",
     "smoke:aws": "tsx scripts/aws-smoke.ts",
     "callbacks": "node dist/scripts/dispatch-callbacks.js",
     "callbacks:once": "node dist/scripts/dispatch-callbacks.js --once"
@@ -36,8 +35,6 @@
   },
   "devDependencies": {
     "@types/node": "26.6.6",
-    "aws-cdk-lib": "2.275.0",
-    "constructs": "10.8.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }

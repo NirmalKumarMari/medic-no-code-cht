@@ -18,7 +18,7 @@ Deployment and smoke tests used the existing `WSParticipantRole/Participant` Clo
 
 Original November 3 checks passed before publication. The November 4 revision adds complete direct prompt-context source verification/auditing and atomic rejected-rule history, removing the KB/vector/ingestion APIs and infrastructure. Current test results are recorded in the root revision note. Local DynamoDB tests remain synthetic and do not prove live model/auth/workflow/CHT integration.
 
-Runtime dependency audit reports zero vulnerabilities. Full development audit still reports CDK's bundled `minimatch` moderate advisory; see the README. This is documented, not hidden by a failed override. The ineffective override was removed.
+Runtime dependency audit reports zero vulnerabilities. The repository-root development audit still reports CDK's bundled `minimatch` moderate advisory; see the README. This is documented, not hidden by a failed override. The ineffective override was removed.
 
 ## Integration still owned by the application components
 
@@ -31,7 +31,7 @@ AgentCore Memory and semantic history are removed. Exact rejected-rule history i
 ## Files and operations
 
 - `src/`: schemas/hash functions, S3 snapshot verifier, workflow repository, durable callback dispatcher and environment configuration.
-- `infra/app.ts`: four-table CDK source; generated template in ignored `.artifacts/`.
+- Repository-root `infra/workflow-data-stack.ts`: four-table CDK module, loaded by the single root `infra/app.ts`; current generated templates live in root `cdk.out/`. The stack name, table names and logical IDs are preserved. Historical `.artifacts/` templates are no longer the synthesis output.
 - `scripts/dispatch-callbacks.ts`: internal EC2/scheduler callback worker; no HTTP listener.
 - `scripts/aws-smoke.ts`: explicit opt-in real AWS storage probe.
 - `test/`: synthetic fixtures and current consistency/history checks.

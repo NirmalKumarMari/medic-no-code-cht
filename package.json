@@ -7,11 +7,14 @@
     "test": "tsx --test tests/*.test.ts",
     "check": "tsc --noEmit",
     "synth": "cdk synth",
-    "deploy": "cdk deploy --outputs-file outputs.json",
-    "destroy": "cdk destroy",
+    "deploy": "cdk deploy BreakingBarriersStorage --outputs-file outputs.json",
+    "destroy": "cdk destroy BreakingBarriersStorage",
     "preflight": "tsx scripts/preflight.ts",
     "teardown": "tsx scripts/teardown.ts",
-    "publish-samples": "tsx examples/publish-samples.ts"
+    "publish-samples": "tsx examples/publish-samples.ts",
+    "synth:storage": "cdk synth BreakingBarriersStorage",
+    "synth:workflow": "cdk synth vera-workflow-data",
+    "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
