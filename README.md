@@ -83,24 +83,22 @@ Agents run as **Strands Agents in containers on EC2**. They reach tools only thr
 
 **Not used:** AgentCore Runtime, Lambda for application logic, Fargate, SageMaker, RDS, model endpoints outside Bedrock, public S3 buckets.
 
-### Knowledge Base
+### Grounding (no Knowledge Base)
 
-| Source | Prefix | Used by |
+There is no Bedrock Knowledge Base and no vector store (ADR-011). The guideline text and a short CHT-conventions primer are stuffed directly into the Drafting and Change Planner prompts, with caching. A rule with no citation is flagged.
+
+| Reference material | How | Used by |
 |---|---|---|
-| Clinical guideline | `guideline/` | Drafting, Cross-Check |
-| CHT docs (XLSForm, tasks, `cht-conf`, reference app only) | `cht-docs/` | Change Planner |
-| Reference configs (`cht-core/config/default`) | `reference-config/` | Change Planner |
+| Clinical guideline | Full text in the prompt (cached) | Drafting |
+| CHT-conventions primer | Curated text in the prompt (cached) | Change Planner |
 
-Agents never query the Knowledge Base directly. A retrieval service applies the source filter, returns chunks with citations, and logs every query with the snapshot. A rule with no citation is flagged.
-
-### Decisions and memory
+### Decision history
 
 | Store | Holds | Written by |
 |---|---|---|
 | DynamoDB + S3 | Exact decision records, rule fingerprints, approvals (source of truth) | Step Functions |
-| AgentCore Memory | Plain-language summaries of past approvals and rejections, per pathway | Memory writer step (code) |
 
-Agents only read memory. The history check uses DynamoDB fingerprints for exact matches and Memory for similar decisions; its flags are advisory and IT must acknowledge each one.
+The history check is deterministic code, not an agent (ADR-013): it looks up rule fingerprints in the decision log for exact matches. There is no AgentCore Memory and no AI "similar decision" layer. Its flags are advisory and IT must acknowledge each one at the deploy gate.
 
 ## Repository layout
 

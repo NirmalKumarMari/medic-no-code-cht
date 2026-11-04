@@ -1,75 +1,76 @@
 import { z } from "zod";
 
 /**
- * StructuredSpec: the Intake Agent's output and the Drafting Agent's input.
+ * StructuredSpec: the Intake Agent's output and the Drafting / Change Planner
+ * input. The master definition is .kiro/specs/logic-model-snapshots
+ * Requirement 4 (request kinds, field bounds, and the strict content list);
+ * this schema is that requirement expressed in Zod. The Intake Agent imports
+ * these types rather than redefining them, so the two cannot drift.
  *
- * This mirrors the real schema in the Intake Agent (branch agents/intake-agent,
- * agents/intake-agent/src/schema.ts). Keep the two in sync; once the Intake
- * Agent consumes `@vera/schemas`, delete its local copy.
- *
- * Two shapes share this type, distinguished by `changeType`:
- *  - "new_pathway": a guideline is being turned into a pathway for the first time.
- *  - "edit": a plain-language change request against an already-approved snapshot.
- *
- * Names `SpecFlag*` avoid clashing with the LogicModel's own `Flag` exports.
+ * Request kinds (Req 4.1):
+ *  - "guideline_upload" / "pathway_pick": first-time drafting of a pathway.
+ *  - "plain_language_edit": a change against an already-approved snapshot;
+ *    requires both the edit text and the base snapshotHash (Req 4.3).
  */
 
-export const SpecFlagSchema = z.object({
-  type: z.enum(["ambiguity", "missing_input"]),
-  text: z.string().min(1),
-});
-export type SpecFlag = z.infer<typeof SpecFlagSchema>;
+export const RequestKind = z.enum([
+  "guideline_upload",
+  "pathway_pick",
+  "plain_language_edit",
+]);
+export type RequestKind = z.infer<typeof RequestKind>;
 
-const BaseFields = {
-  pathway: z.object({
-    id: z.string().min(1), // slug, e.g. "child-cough-fast-breathing"
-    title: z.string().min(1),
-  }),
-  /** The officer's own words, after Guardrails screening. */
-  requestText: z.string().min(1),
-  /** Explicit constraints extracted verbatim, not inferred. */
-  constraints: z.array(z.string()).default([]),
-  submittedBy: z.object({
+/** 64 lowercase hex chars (Req 4.4). */
+const SnapshotHash = z.string().regex(/^[0-9a-f]{64}$/, "snapshotHash must be 64 lowercase hex chars");
+
+/** The authenticated program officer who submitted the request (Author, §glossary). */
+export const SubmittedBy = z
+  .object({
     role: z.literal("program_officer"),
     userId: z.string().min(1),
-  }),
-  submittedAt: z.string().datetime(),
-  flags: z.array(SpecFlagSchema).default([]),
-};
+  })
+  .strict();
+export type SubmittedBy = z.infer<typeof SubmittedBy>;
 
-export const NewPathwaySpecSchema = z.object({
-  changeType: z.literal("new_pathway"),
-  ...BaseFields,
-  guideline: z.object({
-    docId: z.string().min(1), // S3 key / source id for the uploaded guideline
-    title: z.string().min(1),
-    version: z.string().min(1),
-  }),
-});
-
-export const EditSpecSchema = z.object({
-  changeType: z.literal("edit"),
-  ...BaseFields,
-  baseline: z.object({
-    snapshotId: z.string().min(1),
-    snapshotHash: z.string().min(1),
-  }),
-});
-
-export const StructuredSpecBodySchema = z.discriminatedUnion("changeType", [
-  NewPathwaySpecSchema,
-  EditSpecSchema,
-]);
-
-/** The persisted record adds identifiers the agent itself does not choose. */
-export const StructuredSpecSchema = StructuredSpecBodySchema.and(
-  z.object({
-    changeId: z.string().min(1), // ULID, DynamoDB partition key
-    specVersion: z.literal(1),
-  }),
-);
-
-export type NewPathwaySpec = z.infer<typeof NewPathwaySpecSchema>;
-export type EditSpec = z.infer<typeof EditSpecSchema>;
-export type StructuredSpecBody = z.infer<typeof StructuredSpecBodySchema>;
+/**
+ * StructuredSpec content is limited to exactly these properties (Req 4.4,
+ * plus submittedBy per the reconciled requirement). `.strict()` rejects any
+ * other property at any depth, which Req 15.2 / open-question resolution want.
+ */
+export const StructuredSpecSchema = z
+  .object({
+    changeId: z.string().min(1).max(128),
+    requestKind: RequestKind,
+    pathway: z.string().min(1).max(200),
+    guideline: z
+      .object({
+        name: z.string().min(1).max(300),
+        version: z.string().min(1).max(50),
+      })
+      .strict(),
+    submittedBy: SubmittedBy,
+    /** Required (with editText) only for plain_language_edit; see refine below. */
+    baselineSnapshotHash: SnapshotHash.optional(),
+    /** 1–2,000 chars, non-blank; required for plain_language_edit. */
+    editText: z
+      .string()
+      .min(1)
+      .max(2000)
+      .refine((s) => s.trim().length > 0, "editText must not be blank")
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (s) =>
+      s.requestKind !== "plain_language_edit" ||
+      (s.baselineSnapshotHash !== undefined && s.editText !== undefined),
+    {
+      message: "plain_language_edit requires both baselineSnapshotHash and editText",
+      path: ["editText"],
+    },
+  );
 export type StructuredSpec = z.infer<typeof StructuredSpecSchema>;
+
+export function parseStructuredSpec(value: unknown) {
+  return StructuredSpecSchema.safeParse(value);
+}

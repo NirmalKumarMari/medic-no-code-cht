@@ -3,6 +3,7 @@
   "references": [
     { "path": "./schemas" },
     { "path": "./agents/drafting" },
-    { "path": "./agents/history-check" }
+    { "path": "./agents/history-check" },
+    { "path": "./agents/intake-agent" }
   ]
 }

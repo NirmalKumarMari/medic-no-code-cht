@@ -5,19 +5,15 @@ import { fileURLToPath } from "node:url";
 import { StructuredSpecSchema } from "../src/structured-spec.js";
 
 /**
- * Shared-contract cases for StructuredSpec. These are the SAME cases the Intake
- * Agent's schema is checked against (its schema.ts is kept byte-identical to
- * schemas/src/structured-spec.ts). Any drift between the two copies shows up
- * here or in the Intake Agent's own suite.
- *
- * Cases marked `docDisagrees` are where this schema (and the Intake code)
- * deliberately differ from .kiro/specs/logic-model-snapshots Requirement 4.
- * They are recorded, not resolved — see that spec's open question #7.
+ * Shared-contract cases for StructuredSpec. The master definition is
+ * .kiro/specs/logic-model-snapshots Requirement 4 (reconciled: edit-text cap
+ * 2,000 chars, submittedBy included). The Intake Agent imports this schema from
+ * @vera/schemas rather than defining its own, so there is a single source of
+ * truth and nothing can drift.
  */
 interface Case {
   name: string;
   expect: "accept" | "reject";
-  docDisagrees?: boolean;
   input: unknown;
 }
 

@@ -1,20 +1,23 @@
 import { z } from "zod";
 
 /**
- * History Check output schema (solution design §7, §9).
+ * History check output schema (solution design §9, revised per ADR-013).
  *
- * The History Check agent produces ADVISORY flags only. It never blocks a run;
- * IT must acknowledge each flag at the deploy-approval gate. This schema is the
- * locked contract for those flags.
+ * The history check is DETERMINISTIC CODE, not an agent: an exact rule-
+ * fingerprint lookup against the append-only decision log, folded into the
+ * logic checks. The AI "similar decision" layer and AgentCore Memory were cut
+ * (Decisions Log #13 / ADR-013), so only the exact-match kind remains.
+ *
+ * Its flags are ADVISORY. They never block a run; IT acknowledges each at the
+ * deploy-approval gate. An exact match to a previously REJECTED rule is the
+ * high-severity case.
  */
 export const HISTORY_CHECK_SCHEMA_VERSION = "history-check/v1" as const;
 
-/** How the flag was found. */
+/** How the flag was found. Only the deterministic exact match survives (ADR-013). */
 export const HistoryMatchKind = z.enum([
   /** Deterministic exact fingerprint match against the DynamoDB decision log. */
   "exact_fingerprint",
-  /** Similar prior decision surfaced from AgentCore Memory (narrated by the model). */
-  "similar_decision",
 ]);
 export type HistoryMatchKind = z.infer<typeof HistoryMatchKind>;
 
@@ -37,7 +40,7 @@ export const HistoryFlag = z
     /** The past decision/change this matched, for audit linking. */
     pastChangeId: z.string().min(1).optional(),
     pastDisposition: PastDisposition.default("unknown"),
-    /** Rule fingerprint involved in an exact match. */
+    /** Rule fingerprint involved in the exact match. */
     fingerprint: z.string().min(1).optional(),
   })
   .strict();

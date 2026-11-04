@@ -4,12 +4,11 @@ import {
   type StructuredSpec,
 } from "@vera/schemas";
 import type { ModelClient } from "./model.js";
-import { buildPromptParts, SYSTEM_PROMPT, type GuidelineRef } from "./prompt.js";
+import { buildPromptParts, SYSTEM_PROMPT } from "./prompt.js";
 import { NoopGuardrail, type Guardrail, type GuardrailDecision } from "./guardrail.js";
 
 export { BedrockModelClient, DEFAULT_MODEL_IDS } from "./model.js";
 export type { ModelClient, ModelTier } from "./model.js";
-export type { GuidelineRef } from "./prompt.js";
 export {
   BedrockGuardrail,
   NoopGuardrail,
@@ -33,12 +32,6 @@ export interface DraftingInput {
    * (design doc §8 / ADR-011). Callers supply it; there is no retrieval step.
    */
   guidelineText: string;
-  /**
-   * Guideline name + version for the LogicModel. Optional for `new_pathway`
-   * specs (taken from `spec.guideline`: title -> name). REQUIRED for `edit`
-   * specs, which only carry a baseline snapshot reference, not the guideline.
-   */
-  guideline?: GuidelineRef;
 }
 
 export interface AgentUsage {
@@ -56,7 +49,7 @@ export type DraftingResult =
   | {
       ok: false;
       /** Reason the attempt failed — surfaced to a human / the repair loop. */
-      reason: "invalid_input" | "schema_invalid" | "no_json" | "budget_exceeded" | "guardrail_blocked";
+      reason: "schema_invalid" | "no_json" | "budget_exceeded" | "guardrail_blocked";
       /** Human/loop-readable detail. For schema_invalid this is Zod's flattened errors. */
       detail: string;
       rawOutput?: string;
@@ -95,23 +88,7 @@ export class DraftingAgent {
   async draft(input: DraftingInput): Promise<DraftingResult> {
     let modelTurns = 0;
 
-    const guideline: GuidelineRef | undefined =
-      input.guideline ??
-      (input.spec.changeType === "new_pathway"
-        ? { name: input.spec.guideline.title, version: input.spec.guideline.version }
-        : undefined);
-    if (!guideline) {
-      return {
-        ok: false,
-        reason: "invalid_input",
-        detail:
-          "An edit spec carries no guideline name/version; the caller must pass `guideline` " +
-          "(from the baseline snapshot). This is a caller bug, not something for the model to guess.",
-        usage: { modelTurns },
-      };
-    }
-
-    const prompt = buildPromptParts(input.spec, guideline, input.guidelineText);
+    const prompt = buildPromptParts(input.spec, input.guidelineText);
 
     // ---- Guardrail screening (BEFORE the model sees anything) ----
     // Both entry points for personal data — the synthesized spec text and the

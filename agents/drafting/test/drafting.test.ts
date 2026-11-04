@@ -27,27 +27,21 @@ class FakeGuardrail implements Guardrail {
 }
 
 const spec: StructuredSpec = StructuredSpecSchema.parse({
-  changeType: "new_pathway",
   changeId: "01JTESTCHANGEID0000000000",
-  specVersion: 1,
-  pathway: { id: "child-cough-fast-breathing", title: "Child cough and fast breathing" },
-  guideline: { docId: "guidelines/imci-2014.pdf", title: "IMCI", version: "2014" },
-  requestText: "Build the child cough and fast breathing pathway from the IMCI guideline.",
-  constraints: ["Children under 2 months are out of scope."],
+  requestKind: "guideline_upload",
+  pathway: "Child cough and fast breathing",
+  guideline: { name: "IMCI", version: "2014" },
   submittedBy: { role: "program_officer", userId: "officer-1" },
-  submittedAt: "2026-11-04T10:00:00.000Z",
-  flags: [{ type: "missing_input", text: "Referral destination not specified." }],
 });
 
 const editSpec: StructuredSpec = StructuredSpecSchema.parse({
-  changeType: "edit",
   changeId: "01JTESTCHANGEID0000000001",
-  specVersion: 1,
-  pathway: { id: "child-cough-fast-breathing", title: "Child cough and fast breathing" },
-  requestText: "Raise the fast-breathing threshold for 12-59 month olds.",
+  requestKind: "plain_language_edit",
+  pathway: "Child cough and fast breathing",
+  guideline: { name: "IMCI", version: "2014" },
   submittedBy: { role: "program_officer", userId: "officer-1" },
-  submittedAt: "2026-11-04T10:00:00.000Z",
-  baseline: { snapshotId: "child-cough-v1", snapshotHash: "abc123" },
+  baselineSnapshotHash: "a".repeat(64),
+  editText: "Raise the fast-breathing threshold for 12-59 month olds.",
 });
 
 const guidelineText = `Section: Danger signs (page 12)
@@ -128,38 +122,25 @@ test("tells the model to flag a gap when no guideline text is supplied", async (
   assert.match(model.lastRequest!.cachedContext!, /no guideline text was provided/);
 });
 
-test("puts request text, constraints and intake flags in the prompt", async () => {
+test("puts pathway, guideline and request kind in the prompt", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
   const agent = new DraftingAgent(model);
   await agent.draft({ spec, guidelineText });
   const user = model.lastRequest!.user;
-  assert.match(user, /Child cough and fast breathing \(id: child-cough-fast-breathing\)/);
+  assert.match(user, /Pathway: Child cough and fast breathing/);
   assert.match(user, /Guideline: IMCI \(version 2014\)/);
-  assert.match(user, /Build the child cough and fast breathing pathway/);
-  assert.match(user, /Children under 2 months are out of scope/);
-  assert.match(user, /\[missing_input\] Referral destination not specified/);
+  assert.match(user, /Request kind: guideline_upload/);
 });
 
-test("edit spec: uses the caller-supplied guideline and shows the baseline", async () => {
-  const model = new FakeModel(JSON.stringify(goodLogicModel));
-  const agent = new DraftingAgent(model);
-  const result = await agent.draft({
-    spec: editSpec,
-    guidelineText,
-    guideline: { name: "IMCI", version: "2014" },
-  });
-  assert.equal(result.ok, true);
-  assert.match(model.lastRequest!.user, /Baseline snapshot: child-cough-v1 \(hash abc123\)/);
-  assert.match(model.lastRequest!.user, /Guideline: IMCI \(version 2014\)/);
-});
-
-test("edit spec without a guideline ref fails with invalid_input and no model call", async () => {
+test("edit spec: shows the baseline hash and the edit text", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
   const agent = new DraftingAgent(model);
   const result = await agent.draft({ spec: editSpec, guidelineText });
-  assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.reason, "invalid_input");
-  assert.equal(model.invoked, 0);
+  assert.equal(result.ok, true);
+  const user = model.lastRequest!.user;
+  assert.match(user, /Request kind: plain_language_edit/);
+  assert.match(user, new RegExp(`Baseline snapshot hash: ${"a".repeat(64)}`));
+  assert.match(user, /Raise the fast-breathing threshold/);
 });
 
 test("returns no_json when the model emits prose", async () => {

@@ -49,43 +49,20 @@ A condition is one of:
   { "input": "<id>", "in": [<string|number>, ...] }
   { "all": [<condition>, ...] }  { "any": [<condition>, ...] }  { "not": <condition> }  { "otherwise": true }`;
 
-/** Guideline identity the LogicModel must carry (its `guideline` field). */
-export interface GuidelineRef {
-  name: string;
-  version: string;
-}
-
-function formatList(items: string[], empty: string): string {
-  return items.length > 0 ? items.map((i) => `- ${i}`).join("\n") : empty;
-}
-
-function formatSpec(spec: StructuredSpec, guideline: GuidelineRef): string {
-  const flags = formatList(
-    spec.flags.map((f) => `[${f.type}] ${f.text}`),
-    "(none)",
-  );
+function formatSpec(spec: StructuredSpec): string {
   const lines = [
-    `Pathway: ${spec.pathway.title} (id: ${spec.pathway.id})`,
-    `Guideline: ${guideline.name} (version ${guideline.version})`,
-    `Change type: ${spec.changeType}`,
+    `Pathway: ${spec.pathway}`,
+    `Guideline: ${spec.guideline.name} (version ${spec.guideline.version})`,
+    `Request kind: ${spec.requestKind}`,
   ];
-  if (spec.changeType === "edit") {
+  if (spec.requestKind === "plain_language_edit") {
     lines.push(
-      `Baseline snapshot: ${spec.baseline.snapshotId} (hash ${spec.baseline.snapshotHash})`,
+      `Baseline snapshot hash: ${spec.baselineSnapshotHash}`,
+      "",
+      "Edit request (the program officer's own words — apply exactly this change, nothing more):",
+      spec.editText ?? "",
     );
   }
-  lines.push(
-    "",
-    "Request (the program officer's own words):",
-    spec.requestText,
-    "",
-    "Explicit constraints (follow exactly; do not infer others):",
-    formatList(spec.constraints, "(none)"),
-    "",
-    "Flags raised by intake (carry forward into your flags where still unresolved;",
-    'use type "ambiguity" for [ambiguity] and type "gap" for [missing_input]):',
-    flags,
-  );
   return lines.join("\n");
 }
 
@@ -104,7 +81,6 @@ export interface PromptParts {
 
 export function buildPromptParts(
   spec: StructuredSpec,
-  guideline: GuidelineRef,
   guidelineText: string,
 ): PromptParts {
   const stable = [
@@ -118,7 +94,7 @@ export function buildPromptParts(
   const variable = [
     "SPECIFICATION",
     "=============",
-    formatSpec(spec, guideline),
+    formatSpec(spec),
     "",
     "Produce the LogicModel JSON now. Output only the JSON object.",
   ].join("\n");
