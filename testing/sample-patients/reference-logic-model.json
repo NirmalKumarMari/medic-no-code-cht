@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "logic-model/v1",
+  "snapshotId": "reference-newborn-danger-signs-v1",
+  "pathway": "Newborn danger signs at a postnatal visit",
+  "guideline": {
+    "name": "WHO recommendations on maternal and newborn care for a positive postnatal experience",
+    "version": "2022"
+  },
+  "inputs": [
+    {
+      "id": "age_hours",
+      "type": "integer",
+      "label": "Baby's age in hours"
+    },
+    {
+      "id": "feeding_well",
+      "type": "yes_no",
+      "label": "Is the baby feeding well?"
+    },
+    {
+      "id": "history_of_convulsions",
+      "type": "yes_no",
+      "label": "Has the baby had convulsions (fits)?"
+    },
+    {
+      "id": "breaths_per_min",
+      "type": "integer",
+      "label": "Breaths per minute (count for one full minute)"
+    },
+    {
+      "id": "severe_chest_indrawing",
+      "type": "yes_no",
+      "label": "Severe chest in-drawing?"
+    },
+    {
+      "id": "moves_spontaneously",
+      "type": "yes_no",
+      "label": "Does the baby move on its own?"
+    },
+    {
+      "id": "temperature_c",
+      "type": "decimal",
+      "label": "Temperature (°C)"
+    },
+    {
+      "id": "jaundice",
+      "type": "yes_no",
+      "label": "Any yellow skin or eyes (jaundice)?"
+    },
+    {
+      "id": "yellow_palms_soles",
+      "type": "yes_no",
+      "label": "Yellow palms and soles?"
+    }
+  ],
+  "rules": [
+    {
+      "id": "r_not_feeding",
+      "when": {
+        "input": "feeding_well",
+        "eq": "no"
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_convulsions",
+      "when": {
+        "input": "history_of_convulsions",
+        "eq": "yes"
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_fast_breathing",
+      "when": {
+        "input": "breaths_per_min",
+        "gt": 60
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_chest_indrawing",
+      "when": {
+        "input": "severe_chest_indrawing",
+        "eq": "yes"
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_no_movement",
+      "when": {
+        "input": "moves_spontaneously",
+        "eq": "no"
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_fever",
+      "when": {
+        "input": "temperature_c",
+        "gt": 37.5
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_low_temp",
+      "when": {
+        "input": "temperature_c",
+        "lt": 35.5
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_early_jaundice",
+      "when": {
+        "all": [
+          {
+            "input": "jaundice",
+            "eq": "yes"
+          },
+          {
+            "input": "age_hours",
+            "lt": 24
+          }
+        ]
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "r_yellow_palms_soles",
+      "when": {
+        "input": "yellow_palms_soles",
+        "eq": "yes"
+      },
+      "then": {
+        "action": "refer_urgently"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "id": "default",
+      "when": {
+        "otherwise": true
+      },
+      "then": {
+        "action": "home_care_advice"
+      },
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    }
+  ],
+  "flags": [
+    {
+      "type": "ambiguity",
+      "ruleId": "r_early_jaundice",
+      "text": "'In first 24 hours': is a baby exactly 24 hours old included? Modelled as age_hours < 24.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    },
+    {
+      "type": "gap",
+      "text": "Rec 25 says 'refer for further evaluation' but gives no follow-up timing after referral.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13
+      }
+    }
+  ]
+}

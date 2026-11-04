@@ -1,0 +1,29 @@
+                    SYNTHETIC TEST DOCUMENT | Fictional ministry | Not real clinical guidance
+
+
+
+
+ Health Bureau, Republic of Examplia (fictional)
+
+ Draft Newborn Home Visit Notes (UNREVIEWED)
+ Working notes from a planning meeting. Deliberately incomplete: used to test that the AI flags gaps.
+
+
+ Danger signs
+ Health workers should refer newborns who are breathing fast, who have a high fever, or who feel cold to the
+ touch. Babies with early jaundice should also be referred, as should babies who are not feeding properly.
+
+ Babies who seem unwell in other ways may need referral depending on the health worker's judgement.
+
+ Follow-up
+ Referred babies should be followed up soon after referral.
+
+ Clinical content adapted from: WHO recommendations on maternal and newborn care for a positive postnatal experience.
+ Geneva: World Health Organization; 2022. Licence: CC BY-NC-SA 3.0 IGO. This adaptation was not created by WHO; WHO is
+ not responsible for its content.
+
+
+
+
+SYNTHETIC TEST DOCUMENT. Not for clinical use.                                                                    Page 1
+
