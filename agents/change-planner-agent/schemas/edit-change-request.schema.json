@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "changeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "requestKind": {
+      "type": "string",
+      "enum": [
+        "guideline_upload",
+        "pathway_pick",
+        "plain_language_edit"
+      ]
+    },
+    "pathway": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "guideline": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "submittedBy": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "const": "program_officer"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "role",
+        "userId"
+      ],
+      "additionalProperties": false
+    },
+    "baselineSnapshotHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "editText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  },
+  "required": [
+    "changeId",
+    "requestKind",
+    "pathway",
+    "guideline",
+    "submittedBy"
+  ],
+  "additionalProperties": false
+}

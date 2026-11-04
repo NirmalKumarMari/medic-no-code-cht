@@ -11,7 +11,7 @@
     "agents/*"
   ],
   "scripts": {
-    "build": "tsc --build && npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data",
+    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && tsc --build",
     "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json && npm run check --workspaces --if-present",
     "check": "npm run build && npm run typecheck",
     "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",

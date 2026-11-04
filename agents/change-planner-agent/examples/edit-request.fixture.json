@@ -1,0 +1,15 @@
+{
+  "changeId": "demo-edit-1",
+  "requestKind": "plain_language_edit",
+  "pathway": "Synthetic follow-up",
+  "guideline": {
+    "name": "Synthetic testing guideline",
+    "version": "1"
+  },
+  "editText": "Change referral follow-up due time from 3 days to 2 days; keep the seven day window.",
+  "submittedBy": {
+    "role": "program_officer",
+    "userId": "synthetic-author"
+  },
+  "baselineSnapshotHash": "1d62c5522931ad2a42dd432d2a5003c5f70d641b42dcd894cabd9880a2081232"
+}
