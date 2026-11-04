@@ -2,144 +2,132 @@
 
 ## Introduction
 
-This spec makes sure Vera never re-adds a Rule that a clinician rejected. When a clinician rejects a Snapshot at Content_Approval, the clinician marks which of its Rules they reject. The Decision_Recorder stores one Rejected_Rule_Record per marked Rule in the Approvals table, keyed by a Rule_Fingerprint that ignores the Rule's id and position. Before every content approval, the Logic_Checker runs the Rejected_Rule_Check as the sixth check of its Check_Suite. If any Rule of the Snapshot has the same Rule_Fingerprint as a rejected Rule for the same Tenant and Pathway, the check fails and the Overall result fails, so the Snapshot never reaches the clinician again.
+This spec makes sure a clinician always sees when a Snapshot contains a Rule that was rejected before. When a Snapshot is rejected at Content_Approval, the Decision_Recorder stores one Rejected_Rule_Record for each distinct Rule_Fingerprint in that Snapshot, in the Approvals table. A Rule_Fingerprint ignores the Rule's id, Source and position. Before content review, the Rejected_Rule_Check compares every Rule of the new Snapshot with the Rejected_Rule_Records for the same Tenant and Pathway. Each match becomes a high-severity, advisory History_Flag shown to the reviewer. A History_Flag never blocks approval: the clinician sees it and decides.
 
-Everything in this spec is deterministic code reading data stored in the database. No model or agent takes part. This spec replaces the former decision-memory-history-check spec: AgentCore Memory, the Memory_Writer, memory rebuild, the History_Check_Agent, the `decision-log-read` and `decision-memory-read` tools, similarity flags, and the deploy-time History_Check state are removed.
+Everything in this spec is deterministic code reading data stored in the database. No model or agent takes part. This spec replaces the former decision-memory-history-check spec: AgentCore Memory, the Memory_Writer, memory rebuild, the History_Check_Agent, the `decision-log-read` and `decision-memory-read` tools, and similarity flags are removed.
+
+Implementation: `packages/workflow-data/src/fingerprints.ts` (Fingerprint_Calculator) and `packages/workflow-data/src/repository.ts` (`recordDecision`, `checkRuleHistory`, `recordValidation`, `openApprovalWait`).
+
+### Change log
+
+| Date | Change |
+|---|---|
+| 2026-11-04 | Rewritten to match the implementation. A matching Rule is now an advisory high-severity History_Flag that never blocks approval, instead of a failing check that keeps the Snapshot from the clinician. A Content_Rejection records every distinct Rule of the rejected Snapshot, instead of only Rules the clinician marks; Rejected_Rule_Ids are removed. Rejected_Rule_Records are materialized items in the Approvals table read with strongly consistent queries, instead of a secondary index with a visibility timeout. The check also runs again when content review opens (former Open Question 4). Conditions' `all`/`any` lists are sorted before fingerprinting (former Open Question 5). |
 
 ### Dependencies
 
 | Spec | What this spec uses or provides |
 |---|---|
-| logic-model-snapshots | Uses: Snapshot, Rule, Condition, Action, Follow_Up, Canonical_Serializer and Canonical_Form, snapshotHash encoding, Snapshot_Service read with the Integrity check. |
-| logic-checks-golden-cases | Must add the Rejected_Rule_Check to the Check_Suite as its sixth check, include its result in the Check_Results, and scope its determinism statement to the same Snapshot and the same Consulted_Records. |
-| pipeline-orchestrator | Must add Rejected_Rule_Ids to the Approval_Decision, supply the Run Tenant when starting a Logic_Checker Run, and remove the History_Check Optional_State. Owns refusing a Clinician_Rejection that names a Rule id absent from its Snapshot, and retrying a Decision_Recorder call that returns an error. The Decision_Recorder writes the Rejected_Rule_Records defined here. |
-| review-ui-approvals | Must let a clinician mark zero or more Rules on the Content_Approval_Screen when rejecting, refuse at the Review_API a Rule id absent from the Snapshot, and remove History_Flag display at Deploy_Approval. |
+| logic-model-snapshots | Uses: Snapshot, Rule, Condition, Action, Follow_Up, Snapshot_Bundle, canonical JSON, and the snapshot registration that verifies the stored Snapshot_Bundle. |
+| logic-checks-golden-cases | Must refuse to pass validation for a Snapshot that requires a clinician and has no Rules, so the Rejected_Rule_Check cannot be skipped. The Rejected_Rule_Check is not part of the Overall result. |
+| pipeline-orchestrator | Supplies the Tenant, the trusted workflow identity, and the History_Flag identifiers to acknowledge at Deploy_Approval. The Decision_Recorder writes the Rejected_Rule_Records defined here. |
+| review-ui-approvals | Must show every History_Flag on the Content_Approval_Screen, marked high severity, with the past decision it refers to, and let the reviewer approve or reject regardless. Must show History_Flags at Deploy_Approval and collect an acknowledgment for each. |
 | authoring-agents | No interface. No agent or Gateway_Tool gets access to Rejected_Rule_Records. |
-| platform-infrastructure | Provides: the Rejected_Rule_Index on the Approvals table and the Access_Policy. |
+| platform-infrastructure | Provides: the Approvals table and the Access_Policy. |
 
 ## Glossary
 
 Terms marked *(lms)*, *(aa)*, *(lcgc)*, *(po)*, or *(rua)* keep the meaning defined in the logic-model-snapshots, authoring-agents, logic-checks-golden-cases, pipeline-orchestrator, or review-ui-approvals spec.
 
 - **Vera**: The no-code CHT configuration system described in the Solution Design.
-- **LogicModel**, **Snapshot**, **snapshotHash**, **Rule**, **Condition**, **Action**, **Follow_Up**, **Source**, **Canonical_Form**, **Canonical_Serializer**, **Base_Snapshot**, **changeId**, **Snapshot_Service**, **Integrity check**: *(lms)*.
+- **Snapshot**, **snapshotHash**, **snapshotId**, **Rule**, **Condition**, **Action**, **Follow_Up**, **Source**, **Snapshot_Bundle**, **changeId**: *(lms)*.
 - **Tenant**, **Workload_Identity**, **Agent_Gateway**, **Gateway_Tool**: *(aa)*.
-- **Logic_Checker**, **Check_Suite**, **Run**, **Check_Results**, **Check_Report**, **Overall result**: *(lcgc)*.
-- **Decision_Log**, **Decision_Recorder**, **Approvals table**, **Approval_Decision**, **Approval_Gate**, **Content_Approval**, **Deploy_Approval**, **Pipeline_Orchestrator**: *(po)*.
+- **Decision_Recorder**, **Approvals table**, **Approval_Decision**, **Content_Approval**, **Deploy_Approval**, **Pipeline_Orchestrator**: *(po)*.
 - **Review_API**, **Content_Approval_Screen**, **Role_Group**: *(rua)*.
-- **Pathway**: The value of the `pathway` field of a Snapshot's LogicModel.
-- **Fingerprint_Input**: The Condition, the Action, and the Follow_Up (or its absence) of one Rule, excluding the Rule id, the Source, and the Rule's position in its Snapshot.
-- **Rule_Fingerprint**: The SHA-256 digest of the Canonical_Form of one Rule's Fingerprint_Input.
-- **Fingerprint_Calculator**: Deterministic code that computes Rule_Fingerprints.
-- **Rejected_Rule_Ids**: The list of zero or more Rule ids that a clinician marks as rejected in a `reject` Approval_Decision at Content_Approval.
-- **Clinician_Rejection**: An Approval_Decision at Content_Approval with decision `reject` whose approver Cognito group is `clinician`.
-- **Rejection note**: The note of a Clinician_Rejection.
-- **Decision_Log entry identifier**: The identifier the Decision_Recorder assigns to one Decision_Log entry.
-- **Decision time**: The time recorded in the Decision_Log entry of an Approval_Decision.
-- **Rejected_Rule_Record**: An append-only Approvals table item recording that a clinician rejected one Rule of one Snapshot.
-- **Rejected_Rule_Record identifier**: The identifier of one Rejected_Rule_Record, unique across the Approvals table.
-- **Rejected_Rule_Index**: The Approvals table secondary index, provisioned by platform-infrastructure, keyed by Tenant, Pathway, and Rule_Fingerprint.
-- **Index visibility timeout**: The 30 seconds the Decision_Recorder waits for stored Rejected_Rule_Records to appear in the Rejected_Rule_Index (Requirement 3.7).
-- **Rejected_Rule_Check**: The sixth check of the Check_Suite, defined in this spec.
-- **Run Tenant**: The Tenant of the change named by a Run's changeId, supplied by the Pipeline_Orchestrator when the Run starts.
-- **Consulted_Records**: The Rejected_Rule_Records whose Tenant equals the Run Tenant and whose Pathway equals the checked Snapshot's Pathway, as read during one Run.
-- **Rejected_Rule_Match**: A Rule of the checked Snapshot whose Rule_Fingerprint equals the Rule_Fingerprint of at least one Consulted_Record.
-- **Rejected_Rule_Finding**: The finding the Rejected_Rule_Check reports for one Rejected_Rule_Match.
-- **Record read timeout**: The 10 seconds the Rejected_Rule_Check waits for one read of the Rejected_Rule_Index (Requirement 4.8).
-- **Access_Policy**: The IAM policies, provisioned by platform-infrastructure, that govern access to Rejected_Rule_Records and the Rejected_Rule_Index.
+- **Pathway**: The `pathwayId` of the change that a Snapshot belongs to. A revision cannot change it.
+- **Fingerprint_Input**: The object `{ version: "rule-v1", when, then, followUp }` built from one Rule, where `when` is the Rule's Condition with every `all` and `any` list sorted by the canonical JSON of its elements at every depth, `then` is the Rule's Action unchanged, and `followUp` is present only when the Rule has a Follow_Up. The Rule id, the Source, and the Rule's position are excluded.
+- **Rule_Fingerprint**: The SHA-256 digest, as 64 lowercase hexadecimal characters, of the canonical JSON of one Rule's Fingerprint_Input.
+- **Fingerprint_Calculator**: Deterministic code that computes Rule_Fingerprints (`fingerprintRules`).
+- **Content_Rejection**: An Approval_Decision at Content_Approval with decision `reject`, made by a caller the gate allows: a `clinician` when the change requires a clinician, otherwise a `program_reviewer` or a `clinician`.
+- **Rejection note**: The note of a Content_Rejection. It must not be empty or only whitespace.
+- **Rejected_Rule_Record**: An append-only Approvals table item recording that one Rule_Fingerprint was in a Snapshot rejected at Content_Approval.
+- **History_Key**: The partition key of a Rejected_Rule_Record: `HISTORY#{Tenant}#{Pathway}#{Rule_Fingerprint}`.
+- **Rejected_Rule_Check**: The deterministic lookup defined in Requirement 4 (`checkRuleHistory`).
+- **History_Flag**: The advisory finding the Rejected_Rule_Check reports for one matching Rule.
+- **Access_Policy**: The IAM policies, provisioned by platform-infrastructure, that govern access to Rejected_Rule_Records.
 
 ## Requirements
 
 ### Requirement 1: Rule fingerprints
 
-**User Story:** As a clinician, I want a rejected rule recognized by its clinical content, so that renaming or moving the rule does not let it back in.
+**User Story:** As a clinician, I want a rejected rule recognized by its clinical content, so that renaming, re-citing or moving the rule does not hide it from me.
 
 #### Acceptance Criteria
 
-1. THE Fingerprint_Calculator SHALL compute each Rule_Fingerprint as the SHA-256 digest of the Canonical_Form of the Rule's Fingerprint_Input, encoded the same way as snapshotHash.
-2. THE Fingerprint_Calculator SHALL build each Fingerprint_Input from the Rule's Condition, Action, and Follow_Up only.
-3. THE Fingerprint_Calculator SHALL return the same Rule_Fingerprint for the same Fingerprint_Input on every invocation, regardless of when or in which process the computation runs.
-4. THE Fingerprint_Calculator SHALL return equal Rule_Fingerprints for two Rules whose Fingerprint_Inputs have identical Canonical_Forms, including when the Rules differ in Rule id, Source, or position, or belong to different Snapshots.
-5. THE Fingerprint_Calculator SHALL return different Rule_Fingerprints for two Rules whose Fingerprint_Inputs have different Canonical_Forms, including any difference in Condition, Action, or Follow_Up.
-6. THE Fingerprint_Calculator SHALL represent an absent Follow_Up in the Fingerprint_Input with a Canonical_Form different from that of every present Follow_Up.
-7. THE Fingerprint_Calculator SHALL compute each Rule_Fingerprint from the Rule alone, with no model call and no read of stored data.
+1. THE Fingerprint_Calculator SHALL compute each Rule_Fingerprint as the SHA-256 digest of the canonical JSON of the Rule's Fingerprint_Input.
+2. THE Fingerprint_Calculator SHALL return equal Rule_Fingerprints for two Rules that differ only in Rule id, Source, position, object key order, or the order of elements in a Condition's `all` or `any` lists.
+3. THE Fingerprint_Calculator SHALL return different Rule_Fingerprints for two Rules whose Condition, Action, or Follow_Up differ in any other way, including the order of any list inside the Action.
+4. THE Fingerprint_Calculator SHALL give a Rule without a Follow_Up a different Rule_Fingerprint from the same Rule with any Follow_Up.
+5. THE Fingerprint_Calculator SHALL compute each Rule_Fingerprint from the Rule alone, with no model call and no read of stored data, and return the same result on every invocation.
+6. IF a Rule lacks `when` or `then`, two Rules in one Snapshot share an id, a Rule id is not a valid identifier, or a Snapshot has more than 80 Rules, THEN THE Fingerprint_Calculator SHALL return an error and produce no Rule_Fingerprints.
+7. WHEN a Snapshot is registered, THE Snapshot_Store SHALL compute the Rule_Fingerprints of all its Rules and store them with the Snapshot's record.
 
 ### Requirement 2: Recording rejected rules at Content_Approval
 
-**User Story:** As a clinician, I want only the rules I mark when rejecting a Snapshot to be recorded as rejected, so that Vera blocks exactly what I rejected.
+**User Story:** As a clinician, I want the rules of a snapshot I reject to be remembered, so that whoever reviews a later snapshot is told when one of them comes back.
 
 #### Acceptance Criteria
 
-1. WHEN the Decision_Recorder records a Clinician_Rejection, THE Decision_Recorder SHALL store exactly one Rejected_Rule_Record for each distinct Rule id in the Clinician_Rejection's Rejected_Rule_Ids.
-2. THE Decision_Recorder SHALL compute each Rejected_Rule_Record's Rule_Fingerprint with the Fingerprint_Calculator from the Rule with that Rule id in the Snapshot named by the Clinician_Rejection's snapshotHash, read through the Snapshot_Service with the Integrity check.
-3. THE Decision_Recorder SHALL store in each Rejected_Rule_Record the Rejected_Rule_Record identifier, the Rule_Fingerprint, the Rule id, and the snapshotHash, changeId, Tenant, Pathway, Decision_Log entry identifier, Rejection note, and Decision time of the Clinician_Rejection.
-4. WHEN a Clinician_Rejection has an empty Rejected_Rule_Ids list, THE Decision_Recorder SHALL record the Clinician_Rejection with no Rejected_Rule_Record.
-5. WHEN the Decision_Recorder records an Approval_Decision that is not a Clinician_Rejection, including a `reject` at Deploy_Approval or a `reject` by a caller in the `program_reviewer` Role_Group, THE Decision_Recorder SHALL store no Rejected_Rule_Record for that Approval_Decision.
-6. THE Decision_Recorder SHALL store the Approvals table entry of a Clinician_Rejection and all of its Rejected_Rule_Records in one atomic write, so that either all of them are stored or none of them is.
-7. IF the Decision_Recorder cannot read the Snapshot named by a Clinician_Rejection's snapshotHash, or that Snapshot fails the Integrity check, THEN THE Decision_Recorder SHALL store neither the Approvals table entry nor any Rejected_Rule_Record for that Clinician_Rejection and return an error naming the snapshotHash.
-8. IF a Clinician_Rejection names a Rule id absent from the Snapshot named by its snapshotHash, THEN THE Decision_Recorder SHALL store neither the Approvals table entry nor any Rejected_Rule_Record for that Clinician_Rejection and return an error naming each absent Rule id.
+1. WHEN the Decision_Recorder records a Content_Rejection, THE Decision_Recorder SHALL store exactly one Rejected_Rule_Record for each distinct Rule_Fingerprint stored with the rejected Snapshot.
+2. THE Decision_Recorder SHALL store each Rejected_Rule_Record under its History_Key with sort key `{Decision time}#{decisionId}`, holding the Tenant, Pathway, Rule_Fingerprint, source changeId, snapshotHash, snapshotId, decisionId, decision key, decision `reject`, gate `content`, Rejection note, and Decision time.
+3. WHEN the Decision_Recorder records an Approval_Decision that is not a Content_Rejection, including an `approve` at either gate and a `reject` at Deploy_Approval, THE Decision_Recorder SHALL store no Rejected_Rule_Record for it.
+4. THE Decision_Recorder SHALL store the Content_Rejection and all of its Rejected_Rule_Records in one atomic transaction, so that either all of them are stored or none of them is.
+5. IF a Content_Rejection has an empty Rejection note, THEN THE Decision_Recorder SHALL refuse it and store no Approval_Decision and no Rejected_Rule_Record.
+6. IF two reviewers decide the same Content_Approval concurrently, THEN THE Decision_Recorder SHALL commit at most one decision, and SHALL leave no Rejected_Rule_Record unless the committed decision is a Content_Rejection.
 
 ### Requirement 3: Append-only storage of Rejected_Rule_Records
 
-**User Story:** As an auditor, I want rejected-rule records that are written once and never changed, so that a recorded rejection cannot be lost, duplicated, or altered.
+**User Story:** As an auditor, I want rejected-rule records written once and never changed, so that a recorded rejection cannot be lost, duplicated, or altered.
 
 #### Acceptance Criteria
 
-1. THE Decision_Recorder SHALL store every Rejected_Rule_Record as an item in the Approvals table under the changeId of its Clinician_Rejection.
-2. THE Rejected_Rule_Index SHALL index every Rejected_Rule_Record by Tenant, Pathway, and Rule_Fingerprint.
-3. THE Decision_Recorder SHALL derive each Rejected_Rule_Record identifier from the Decision_Log entry identifier and the Rule id, so that every attempt to record the same Clinician_Rejection produces the same identifiers.
-4. THE Decision_Recorder SHALL create a Rejected_Rule_Record only when no item with the same Rejected_Rule_Record identifier exists in the Approvals table.
-5. WHEN the Decision_Recorder records the same Clinician_Rejection more than once, THE Decision_Recorder SHALL leave exactly one Rejected_Rule_Record per distinct Rule id in its Rejected_Rule_Ids, with content identical to the record stored first.
-6. THE Decision_Recorder SHALL report a Clinician_Rejection as recorded only after the Rejected_Rule_Index returns every Rejected_Rule_Record of that Clinician_Rejection.
-7. IF the Rejected_Rule_Index does not return every Rejected_Rule_Record of a Clinician_Rejection within the Index visibility timeout after they are stored, THEN THE Decision_Recorder SHALL return an error naming the Clinician_Rejection's Decision_Log entry identifier.
+1. THE Decision_Recorder SHALL create each Rejected_Rule_Record only when no item with the same History_Key and sort key exists in the Approvals table.
+2. WHEN the same Content_Rejection is submitted again with the same idempotency key and content, THE Decision_Recorder SHALL return the original decision and leave exactly one Rejected_Rule_Record per distinct Rule_Fingerprint.
+3. THE Decision_Recorder SHALL provide no operation that updates or deletes a Rejected_Rule_Record.
 
 ### Requirement 4: Rejected_Rule_Check
 
-**User Story:** As a clinician, I want every Snapshot checked against the rules I rejected before it reaches me, so that I never see a rejected rule again.
+**User Story:** As a clinician, I want to be told when a snapshot contains a rule that was rejected before, so that I can decide with that knowledge.
 
 #### Acceptance Criteria
 
-1. WHEN the Logic_Checker starts a Run on a Snapshot, THE Logic_Checker SHALL run the Rejected_Rule_Check on that Snapshot as one check of the Check_Suite.
-2. THE Rejected_Rule_Check SHALL compute the Rule_Fingerprint of every Rule of the Snapshot with the Fingerprint_Calculator.
-3. THE Rejected_Rule_Check SHALL read every Consulted_Record for the Run Tenant and the Snapshot's Pathway from the Rejected_Rule_Index.
-4. THE Rejected_Rule_Check SHALL read Rejected_Rule_Records only from the Rejected_Rule_Index, with no model call and no agent call.
-5. WHEN at least one Rule of the Snapshot is a Rejected_Rule_Match, THE Rejected_Rule_Check SHALL return a fail result holding one Rejected_Rule_Finding for each Rejected_Rule_Match.
-6. THE Rejected_Rule_Check SHALL include in each Rejected_Rule_Finding the Rule id, the Rule_Fingerprint, and, for each matching Consulted_Record, the Rejected_Rule_Record identifier, snapshotHash, changeId, Rejection note, and Decision time.
-7. WHEN no Rule of the Snapshot is a Rejected_Rule_Match, including when there are no Consulted_Records, THE Rejected_Rule_Check SHALL return a pass result with no Rejected_Rule_Findings.
-8. IF the Run has no Run Tenant, or a read of the Rejected_Rule_Index returns an error or no response within the Record read timeout, THEN THE Rejected_Rule_Check SHALL return a fail result with an error naming the cause.
-9. WHEN the Rejected_Rule_Check returns a fail result, THE Logic_Checker SHALL set the Overall result of the Run to fail.
+1. WHEN validation is recorded for a Snapshot, and again WHEN the Pipeline_Orchestrator opens Content_Approval for it, THE Rejected_Rule_Check SHALL run on that Snapshot and store the resulting History_Flags on the change.
+2. THE Rejected_Rule_Check SHALL, for each Rule_Fingerprint stored with the Snapshot, read with a strongly consistent query the most recent Rejected_Rule_Record under the History_Key for the change's Tenant and Pathway.
+3. THE Rejected_Rule_Check SHALL read no Rejected_Rule_Record of another Tenant or another Pathway.
+4. IF a Rejected_Rule_Record read by the Rejected_Rule_Check does not carry the expected Tenant, Pathway, Rule_Fingerprint, decision `reject`, and gate `content`, THEN THE Rejected_Rule_Check SHALL return an integrity error.
+5. WHEN a Rule of the Snapshot matches a Rejected_Rule_Record, THE Rejected_Rule_Check SHALL return one History_Flag holding: an identifier derived from the Rule id, source changeId, and decisionId; type `previously_rejected_rule`; severity `high`; `advisory: true`; the Rule id; the Rule_Fingerprint; the source changeId, decisionId, rejected snapshotHash, and rejected snapshotId; the first 320 characters of the Rejection note; and the Decision time.
+6. WHEN no Rule of the Snapshot matches, THE Rejected_Rule_Check SHALL return no History_Flags.
+7. THE Rejected_Rule_Check SHALL use no model call and no agent call.
+8. IF a change requires a clinician and its Snapshot has no Rules, THEN validation SHALL fail, so that the Rejected_Rule_Check is never skipped on a clinical Snapshot.
 
-### Requirement 5: Deterministic, reported results
+### Requirement 5: Advisory flags and the human decision
 
-**User Story:** As an IT lead, I want the rejected-rule result to be repeatable and to show exactly which records it used, so that I can trust and audit the block.
+**User Story:** As a clinician, I want rejected-rule matches shown to me without being decided for me, so that I stay in control of what I approve.
 
 #### Acceptance Criteria
 
-1. THE Rejected_Rule_Check SHALL return an identical result, including findings, order, and counts, on every Run for the same Snapshot and the same set of Consulted_Records.
-2. THE Rejected_Rule_Check SHALL record in its result the Rejected_Rule_Record identifier of every Consulted_Record that matches a Rule of the Snapshot.
-3. THE Rejected_Rule_Check SHALL record in its result the number of Consulted_Records it read.
-4. THE Rejected_Rule_Check SHALL order Rejected_Rule_Findings by Rule id in ascending code-point order.
-5. THE Rejected_Rule_Check SHALL order the matching Consulted_Records within each Rejected_Rule_Finding by Decision time, earliest first, and then by Rejected_Rule_Record identifier in ascending code-point order.
-6. THE Rejected_Rule_Check SHALL list the matched Rejected_Rule_Record identifiers in its result in ascending code-point order.
-7. THE Rejected_Rule_Check SHALL copy every value taken from a Consulted_Record into its result unchanged.
-8. WHEN the Rejected_Rule_Check completes, THE Logic_Checker SHALL include the Rejected_Rule_Check result in the Check_Results of the Run under the check name `rejected_rule`.
+1. THE Pipeline_Orchestrator SHALL open Content_Approval for a Snapshot with any number of History_Flags, including zero; History_Flags SHALL NOT block or fail the check, the gate, or the decision.
+2. THE Review_API SHALL show every History_Flag stored on the change at Content_Approval, marked as high severity.
+3. WHEN a reviewer decides at Content_Approval, THE Decision_Recorder SHALL store the History_Flags shown with the change in the Approval_Decision, so that the decision record shows what the reviewer was told.
+4. WHEN the Pipeline_Orchestrator opens Deploy_Approval with History_Flag identifiers, THE Decision_Recorder SHALL refuse an `approve` that does not acknowledge each of them, and SHALL record the acknowledged identifiers in the Approval_Decision.
+5. THE Decision_Recorder SHALL accept a `reject` at Deploy_Approval whatever History_Flags it acknowledges.
 
 ### Requirement 6: Access to Rejected_Rule_Records
 
-**User Story:** As a security reviewer, I want only the Decision_Recorder to write rejected-rule records and no agent to touch them, so that no automated author can erase or bypass a clinician's rejection.
+**User Story:** As a security reviewer, I want only the Decision_Recorder to write rejected-rule records and no agent to touch them, so that no automated author can erase or hide a clinician's rejection.
+
+**Status: not yet implemented.** No component roles exist yet (see platform-infrastructure Requirement 7).
 
 #### Acceptance Criteria
 
 1. THE Access_Policy SHALL grant permission to create Rejected_Rule_Records only to the Decision_Recorder's IAM role.
-2. THE Access_Policy SHALL grant the Logic_Checker's IAM role permission to query the Rejected_Rule_Index and no permission to create, update, or delete items in the Approvals table.
+2. THE Access_Policy SHALL grant the Rejected_Rule_Check's IAM role permission to query Rejected_Rule_Records and no permission to create, update, or delete items in the Approvals table.
 3. THE Access_Policy SHALL grant no IAM role permission to update or delete a Rejected_Rule_Record.
-4. THE Access_Policy SHALL grant no Workload_Identity permission to read or write Rejected_Rule_Records or to query the Rejected_Rule_Index.
-5. THE Agent_Gateway SHALL register no Gateway_Tool whose backing permissions read or write Rejected_Rule_Records or query the Rejected_Rule_Index.
+4. THE Access_Policy SHALL grant no Workload_Identity permission to read or write Rejected_Rule_Records.
+5. THE Agent_Gateway SHALL register no Gateway_Tool whose backing permissions read or write Rejected_Rule_Records.
 
 ## Open Questions
 
-1. **Lifting a rejection.** This spec has no lift path, so a rejected Rule stays blocked for its Tenant and Pathway permanently. How should a clinician lift a rejection if they later want the Rule, for example through a clinician-only decision that the Decision_Recorder records and the Rejected_Rule_Check honors?
-2. **Matching scope.** This spec matches only within the same Tenant and Pathway. Should a Rule rejected in one Pathway also block identical Rules in the Tenant's other Pathways?
-3. **Zero-rule rejections.** A Clinician_Rejection with no marked Rules creates no Rejected_Rule_Records (Requirement 2.4). Should the Review_UI allow it, or require at least one marked Rule?
-4. **Concurrent changes.** A Snapshot that passed the Rejected_Rule_Check before another change's Clinician_Rejection was recorded can still reach the clinician. Should the check run again when the clinician opens or submits a decision at Content_Approval?
-5. **Comparison order.** If the Canonical_Form keeps the order of a Condition's `all` list, reordering the Comparisons of a rejected Rule produces a new Rule_Fingerprint. Should the Fingerprint_Input sort the Comparisons?
+1. **Matching scope.** Matching is limited to the same Tenant and Pathway. Should a Rule rejected in one Pathway also be flagged in the Tenant's other Pathways?
+2. **Whole-snapshot recording.** A Content_Rejection records every Rule of the rejected Snapshot, including Rules the clinician had no objection to, so later Snapshots can carry flags for acceptable Rules. Should the Review_UI let the clinician mark which Rules they reject, so only those are recorded?
+3. **Wording-only rejections.** A `program_reviewer` rejection of wording-only content also records its Rules. Should only clinician rejections create Rejected_Rule_Records?

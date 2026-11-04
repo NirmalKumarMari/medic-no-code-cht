@@ -1,18 +1,27 @@
 # Vera
 
-**No-code CHT configuration for health ministries.** Vera turns a public clinical guideline, or a plain-language change request, into tested, approved [Community Health Toolkit](https://communityhealthtoolkit.org) (CHT) configuration. 
+No-code CHT configuration for health ministries. AI drafts, deterministic code builds/tests, and humans approve twice.
 
-Built for [Medic](https://medic.org) at AWS Breaking Barriers 2026 (Seattle, Open path).
+Source of truth: [FINAL Solution Design](Medic%20Mobile%20-%20FINAL%20Solution%20Design%20%28Open%20Path%29.md), revised November 4, 2026. This supersedes the earlier KB/Memory architecture. The guideline's full extracted text goes directly into Drafting; an explicitly curated CHT-conventions primer goes into Change Planner. There is no Knowledge Base, vector store, embeddings, semantic search, Cross-Check agent or AgentCore Memory in this MVP.
 
----
+## Pipeline
 
-## Why Vera exists
+Intake → Draft → deterministic logic checks (including rejected-rule fingerprints) → content approval → compile/build/test → deploy approval → upload/verify in CHT.
 
-The CHT serves 182,000+ community health workers in 24 countries, and eight governments run it as their national platform. Changing it today requires fluency in XLSForm, JSON, JavaScript and CHT conventions, so every change, even a five-minute label fix, waits on a small pool of developers and a full release cycle. Protocol updates can take months to reach health workers.
+Step Functions drives the workflow; its task tokens park the two human approval gates. Services and agents run in EC2 containers, using Bedrock model inference and Guardrails. AgentCore Gateway, Policy, Identity and Observability remain in the design. No model-invoked evidence search tool is registered. Code loads exact approved source versions before inference. Models never compile, approve or deploy. Clinical changes require a clinician; role/author separation is enforced by trusted backend handlers.
 
-Changes must also stay safe. In Medic's own audit, a missing pair of brackets would have changed who sees 11 of 24 forms in a national configuration, and every manual check passed. Only running synthetic patients through the build caught it.
+## Storage
 
-**Vera removes the coding requirement without removing a single check or approval.**
+| Component | Purpose |
+|---|---|
+| DynamoDB Changes | Current projection and immutable snapshots, build/test/deploy references |
+| DynamoDB Approvals | Human decisions/idempotency receipts and a strongly consistent rejected-rule lookup |
+| DynamoDB Audit | Append-only causal history and artifact references |
+| DynamoDB Tokens | Private approval callbacks/recovery, excluded from UI/model context |
+| One versioned private SSE-KMS S3 bucket | `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/` |
+| CHT's own CouchDB | Synthetic contacts/reports for the separately managed CHT test instance |
+
+Rule history hashes structural `when` + `then` + optional `followUp`, normalizing object keys and conjunction/disjunction order. It matches previous content-rejected snapshots for the same tenant/pathway. Matches are high-severity **advisory** flags on content review. They are not clinical correctness judgments. No LLM or Memory service performs history lookup.
 
 ## How it works
 
@@ -81,163 +90,52 @@ Agents run as **Strands Agents in containers on EC2**. They reach tools only thr
 | Build and test | One-off container from pinned `medicmobile/cht-app-ide`, no network, non-root, read-only snapshot |
 | Deployer | Separate step and IAM role; the only reader of the CHT login in Secrets Manager, and only after deploy approval |
 | Access | Systems Manager Session Manager (no open SSH), Cognito groups for approvers |
-| Infrastructure as code | Terraform *(or CDK in TypeScript; see [Tools and why](#tools-and-why))* |
+| Infrastructure as code | AWS CDK in TypeScript (`infra/`) |
 
 **Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Lambda for application logic, Fargate, SageMaker, RDS, model endpoints outside Bedrock, public S3 buckets.
 
-### Grounding (no Knowledge Base)
+## Implemented modules
 
-There is no Bedrock Knowledge Base and no vector store (ADR-011). The guideline text and a short CHT-conventions primer are stuffed directly into the Drafting and Change Planner prompts, with caching. A rule with no citation is flagged.
+- [packages/artifact-storage](packages/artifact-storage/README.md): artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).
+- [infra/](infra/README.md): one CDK app with separate storage and workflow-data stack modules. All infrastructure definitions and CDK dependencies live at the repository root.
+- [packages/workflow-data](packages/workflow-data/README.md): four-table runtime repositories, fingerprint history, human decisions and callback recovery. [Status](packages/workflow-data/docs/STATUS.md), [integration contract](packages/workflow-data/docs/INTEGRATION.md).
 
-| Reference material | How | Used by |
-|---|---|---|
-| Clinical guideline | Full text in the prompt (cached) | Drafting |
-| CHT-conventions primer | Curated text in the prompt (cached) | Change Planner |
+These are libraries/IaC and an internal callback worker. The UI, Cognito verifier, live state machine, model prompt/cache integration, compiler/harness and CHT deployment adapter must be connected by their owners. Local tests are not proof of a deployed end-to-end clinical workflow. The final pathway, real guideline, clinician-reviewed golden cases and real curated primer remain team decisions. Existing public sample files are optional development fixtures, not finalized clinical inputs.
 
-### Decision history
+## Verify locally
 
-| Store | Holds | Written by |
-|---|---|---|
-| DynamoDB + S3 | Exact decision records, rule fingerprints, approvals (source of truth) | Step Functions |
+Node 22+, npm and Docker are required. This is an npm workspace with one root `package-lock.json`. Install once at the repository root:
 
-The history check is deterministic code, not an agent (ADR-013): it looks up rule fingerprints in the decision log for exact matches. There is no AgentCore Memory and no AI "similar decision" layer. Its flags are advisory and IT must acknowledge each one at the deploy gate.
-
-## Repository layout
-
-> Planned layout. Update as the code lands.
-
-```
-.
-├── README.md
-├── docs/
-│   ├── solution-design.md      # Canonical design (read this first)
-│   ├── architecture.png        # Diagram above
-│   └── architecture.svg
-├── infra/                      # Terraform (or CDK) for every AWS resource
-├── statemachine/               # Step Functions definition
-├── agents/
-│   ├── intake-agent/           # Request -> StructuredSpec (one call, no tools)
-│   ├── drafting/               # StructuredSpec -> LogicModel (guideline in prompt)
-│   ├── change-planner/         # Plain-language edit -> ChangePlan
-│   └── history-check/          # Deterministic exact-fingerprint check (not an agent)
-├── services/
-│   ├── logic-checks/           # Deterministic validators + golden cases
-│   ├── compiler/               # LogicModel -> XLSForm + tasks.js
-│   ├── deployer/               # cht-conf upload + verify (separate role)
-│   └── review-ui/              # Clinician and IT approval screens
-├── build-image/                # Dockerfile from pinned medicmobile/cht-app-ide
-├── schemas/                    # StructuredSpec, LogicModel, ChangePlan
-└── golden-cases/               # ~12 cases from the guideline, confirmed by Medic
+```sh
+npm ci
+npm run check
+npm run db:local:up
+npm test
+npm run synth
+npm run db:local:down
 ```
 
-## Getting started
+`npm run build` builds artifact-storage first, then workflow-data. `npm run check` builds both and type-checks the packages, infrastructure, examples and scripts. `npm test` builds both and runs infrastructure tests plus both package suites. The DynamoDB tests need the local container started above. `db:local:down` removes that disposable container and its in-memory test data.
 
-### Prerequisites
+Root `npm run synth` generates both templates in `cdk.out/`. Infrastructure tests live in `tests/infra/`; runtime tests live next to each package under `tests/`. The workflow package's `synth` command forwards to the same root app for compatibility.
 
-- An AWS account in `us-west-2` with Bedrock model access
-- Terraform 1.x *(or Node.js 22 + CDK 2.x if using CDK)*
-- AWS CLI v2 and the Session Manager plugin
-- Docker with Compose v2
+The DynamoDB tests use loopback-only synthetic local state. These commands do not publish sources, seed AWS/CHT or invoke models. Artifact-storage tests use fake SDK clients. See each module's documentation for explicit opt-in deployment. Keep offline build containers credential-free and separate from the deploy role. All resources use the project's AWS `us-west-2` environment and tag conventions.
 
-### Deploy
+## Package imports
 
-```bash
-# TODO: confirm once infra/ is in place
-cd infra
-terraform init
-terraform apply -var="project=vera"
+```ts
+import { ArtifactStore, SourcePublisher, PromptContextBuilder } from '@vera/artifact-storage';
+import { artifactRefSchema, type ArtifactRef } from '@vera/artifact-storage/contracts';
+import { WorkflowRepository, s3SnapshotVerifier } from '@vera/workflow-data';
 ```
 
-### Open the review UI
+Imports resolve to built JavaScript/declarations; run `npm run build` before consuming them. The contracts subpath is the shared `ArtifactRef` schema/type and does not import AWS SDK clients. Workflow-data re-exports that contract to preserve its existing public API. Import public package exports rather than another package's source files.
 
-```bash
-# TODO: fill in instance ID and port from terraform output
-aws ssm start-session --target <services-instance-id> \
-  --document-name AWS-StartPortForwardingSession \
-  --parameters '{"portNumber":["<port>"],"localPortNumber":["<port>"]}'
-```
+## Deployment and retention
 
-### Run a pathway
+The four workflow tables were deployed and storage-smoke-verified on November 3 (receipts are in the workflow package). The single `infra/` folder keeps source storage/screens/roles and workflow tables in independently deployable stacks with their original names and logical IDs; live migration status is documented in [the revision note](docs/DATABASE_REVISION_2026-11-04.md). Never apply an old stack template that recreates the removed infrastructure.
 
-1. Upload a public guideline and pick a pathway in the review UI.
-2. Review flags, then approve as the clinician.
-3. Review the diff, test report and history flags, then approve as the IT lead.
-
-### Tear down
-
-```bash
-cd infra
-terraform destroy -var="project=vera"
-```
-
-This removes everything, including the vector store and retained volumes.
-
-## Testing
-
-All gates are deterministic. No model grades a test.
-
-| Check | When | Proves |
-|---|---|---|
-| Schema validation | Every model output | Output has the right shape |
-| Logic checks | Before content approval | No missing branches, overlaps or unreachable questions |
-| Golden cases | Before content approval | Logic matches the guideline's own worked examples |
-| `cht-conf` build | After compile | Valid CHT configuration; failure means it never ships |
-| Synthetic patients | After build | 100% branch coverage; built form matches the approved logic |
-| Deployment check | After upload | CHT instance serves the built app settings |
-
-## Cost
-
-| Item | Value |
-|---|---|
-| Model cost per pathway run | *TBD* |
-| AgentCore cost per run | *TBD* |
-| Total spend during the event | *TBD* (budget $500, alerts at $250 and $400) |
-
-Every resource is tagged with the project tag and every model call is tagged by `agent`, `tenant` and `runId`, so Cost Explorer and CloudWatch show cost per run and per agent.
-
-## Well-Architected
-
-| Pillar | Evidence |
-|---|---|
-| Operational excellence | One-command deploy and teardown; each change traced from request to deploy |
-| Security | Least-privilege role per component, Guardrails, deny-by-default agent policy, build and deploy credentials separated, approvals bound to exact versions |
-| Reliability | Pending approvals survive a restart (task tokens); build-failure split avoids needless re-approval; rollback to a prior approved snapshot |
-| Performance efficiency | Guideline to approved, tested build in minutes; smallest model per job; no open-ended agent loops |
-| Cost optimization | Cost per run reported; S3 Vectors instead of a provisioned vector store; instances stopped when idle |
-| Sustainability | No model training; compute only while building or testing; phones stay AI-free |
-
-Also reviewed against the AWS Well-Architected **Agentic AI Lens**: bounded autonomy, human-in-the-loop governance, deterministic evaluation, and per-agent cost attribution. Details in [docs/solution-design.md](docs/solution-design.md#18-well-architected-mapping).
-
-## Tools and why
-
-| Tool or service | Why |
-|---|---|
-| Step Functions | Fixed order the agents can't skip; durable approval waits; visual execution history |
-| Strands Agents on EC2 | Portable agent code with no hosting lock-in; matches Medic's containers-on-EC2 direction |
-| AgentCore Gateway + Policy | Enforces each agent's tool list outside the agent's own code |
-| AgentCore Memory | Lets agents learn from past clinician decisions at production scale |
-| Bedrock Knowledge Base + S3 Vectors | Grounds drafts in the guideline with citations; no provisioned vector capacity |
-| DynamoDB + S3 | Exact, append-only decision log and audit trail |
-| `medicmobile/cht-app-ide` | Medic's own pinned build toolchain, so builds match what Medic runs |
-| Terraform | Medic's infrastructure standard |
-
-**Models used:** *TBD (record Bedrock model IDs and versions here).*
-
-## Path to production
-
-- Each ministry is a separate `tenant` in every record, S3 path, KB filter and Memory namespace.
-- Decision history is tied to the guideline version; older versions are marked superseded.
-- Production sign-in through Cognito or the ministry's identity provider, with roles enforced server-side.
-- Models sit behind one interface, so Medic can swap to a cheaper or better model without code changes.
-- Output is always standard CHT configuration that ministries can maintain without Vera.
-
-## Open items
-
-See [docs/solution-design.md §20](docs/solution-design.md#20-open-items). The pathway and guideline (working example: child cough and fast breathing) are not yet final.
-
-## Team
-
-Team Vera, AWS Breaking Barriers 2026, Seattle.
+Both IaC stacks retain durable stores by default. A stack delete is **not** complete data teardown. Review exports/retention and exact resources before any explicit destructive cleanup. EC2/CHT resources are managed separately from these modules.
 
 ## License
 

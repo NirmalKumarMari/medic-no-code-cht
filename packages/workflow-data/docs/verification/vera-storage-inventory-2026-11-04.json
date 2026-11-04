@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-11-04T18:41:49.625883+00:00",
+  "region": "us-west-2",
+  "account": "049197632966",
+  "knowledgeBases": [],
+  "vectorBuckets": [],
+  "stacks": [
+    {
+      "name": "vera-workflow-data",
+      "status": "CREATE_COMPLETE"
+    },
+    {
+      "name": "kiro-ide-browser",
+      "status": "CREATE_COMPLETE"
+    },
+    {
+      "name": "base",
+      "status": "CREATE_COMPLETE"
+    }
+  ],
+  "tables": [
+    "vera-workflow-Approvals",
+    "vera-workflow-Audit",
+    "vera-workflow-Changes",
+    "vera-workflow-Tokens"
+  ],
+  "agentCoreMemories": [],
+  "contentDecisionInventory": {
+    "Count": 0,
+    "ScannedCount": 2,
+    "ConsumedCapacity": null
+  },
+  "completedAt": "2026-11-04T18:50:32.874318+00:00"
+}

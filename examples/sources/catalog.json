@@ -1,0 +1,42 @@
+[
+  {
+    "file": "cdc-hand-hygiene.txt",
+    "format": "txt",
+    "sourceType": "guideline",
+    "sourceId": "cdc-core-hand-hygiene",
+    "version": "2024-04-12",
+    "section": "5a. Hand Hygiene",
+    "path": "infection-control/hcp/core-practices/index.html#5a",
+    "url": "https://www.cdc.gov/infection-control/hcp/core-practices/index.html",
+    "extraction": "Complete 5a table row, including recommendations and comments. HTML tags removed; entities decoded.",
+    "sourceHash": "d83427b5d7e90cea045120c697ca892edbedc781eacffaff494f51b6ad927b72",
+    "reviewStatus": "pending-publication-review"
+  },
+  {
+    "file": "cht-tasks-introduction.md",
+    "format": "md",
+    "sourceType": "cht-docs",
+    "sourceId": "cht-tasks-introduction",
+    "version": "85ae1e6a27e127834b755b470143c3119d46102d",
+    "section": "Tasks introduction",
+    "path": "content/en/building/tasks/tasks-js.md",
+    "url": "https://raw.githubusercontent.com/medic/cht-docs/85ae1e6a27e127834b755b470143c3119d46102d/content/en/building/tasks/tasks-js.md",
+    "extraction": "Introduction after figure and before see-also shortcode. No table split.",
+    "sourceHash": "9cad24d44e31a172de1cf5ab789c7bf32a6d307df920544ff65bd4e427aba574",
+    "reviewStatus": "pending-publication-review"
+  },
+  {
+    "file": "cht-reference-task.js",
+    "format": "js",
+    "sourceType": "reference-config",
+    "sourceId": "cht-pnc-task",
+    "version": "ac1d70cb8ea1f5b39c8d78c4ead03bd1814eddf9",
+    "section": "pnc.danger_sign_followup_baby.from_report",
+    "workflow": "pnc",
+    "path": "config/default/tasks.js",
+    "url": "https://raw.githubusercontent.com/medic/cht-core/ac1d70cb8ea1f5b39c8d78c4ead03bd1814eddf9/config/default/tasks.js",
+    "extraction": "Complete task object via TypeScript AST; helper references resolve in original file and nools-extras.js. Reference only; not executable in isolation.",
+    "sourceHash": "604a21a377adbc888c69a30ce4a4f2a2ef91ef96fc1f68d678b5752614e97d0c",
+    "reviewStatus": "pending-publication-review"
+  }
+]

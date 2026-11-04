@@ -1,0 +1,38 @@
+{
+    "Status": "CREATE_COMPLETE",
+    "Id": "arn:aws:cloudformation:us-west-2:049197632966:stack/vera-workflow-data/6382e720-d7e2-11f1-a9d0-0a666345d565",
+    "Outputs": [
+        {
+            "OutputKey": "TokensTableName",
+            "OutputValue": "vera-workflow-Tokens"
+        },
+        {
+            "OutputKey": "TokensTableArn",
+            "OutputValue": "arn:aws:dynamodb:us-west-2:049197632966:table/vera-workflow-Tokens"
+        },
+        {
+            "OutputKey": "ChangesTableArn",
+            "OutputValue": "arn:aws:dynamodb:us-west-2:049197632966:table/vera-workflow-Changes"
+        },
+        {
+            "OutputKey": "ChangesTableName",
+            "OutputValue": "vera-workflow-Changes"
+        },
+        {
+            "OutputKey": "AuditTableName",
+            "OutputValue": "vera-workflow-Audit"
+        },
+        {
+            "OutputKey": "ApprovalsTableName",
+            "OutputValue": "vera-workflow-Approvals"
+        },
+        {
+            "OutputKey": "ApprovalsTableArn",
+            "OutputValue": "arn:aws:dynamodb:us-west-2:049197632966:table/vera-workflow-Approvals"
+        },
+        {
+            "OutputKey": "AuditTableArn",
+            "OutputValue": "arn:aws:dynamodb:us-west-2:049197632966:table/vera-workflow-Audit"
+        }
+    ]
+}

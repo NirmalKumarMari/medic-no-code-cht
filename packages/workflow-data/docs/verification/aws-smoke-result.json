@@ -1,0 +1,22 @@
+{
+  "result": "PASS",
+  "region": "us-west-2",
+  "tables": [
+    "vera-workflow-Changes",
+    "vera-workflow-Approvals",
+    "vera-workflow-Audit",
+    "vera-workflow-Tokens"
+  ],
+  "checks": [
+    "active",
+    "on-demand",
+    "encryption",
+    "PITR",
+    "deletion-protection",
+    "token-TTL",
+    "cross-table-atomic-write",
+    "conditional-overwrite-rejection",
+    "transaction-rollback"
+  ],
+  "syntheticProbeId": "synthetic-storage-probe-37c9be70-00b8-4808-8ade-f9429697cd30"
+}

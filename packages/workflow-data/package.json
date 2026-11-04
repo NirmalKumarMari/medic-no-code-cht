@@ -1,0 +1,43 @@
+{
+  "name": "@vera/workflow-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration.test.ts",
+    "synth": "npm --prefix ../.. run synth",
+    "smoke:aws": "tsx scripts/aws-smoke.ts",
+    "callbacks": "node dist/scripts/dispatch-callbacks.js",
+    "callbacks:once": "node dist/scripts/dispatch-callbacks.js --once",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1161.0",
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/client-sfn": "3.1161.0",
+    "@aws-sdk/lib-dynamodb": "3.1161.0",
+    "zod": "4.6.7",
+    "@vera/artifact-storage": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

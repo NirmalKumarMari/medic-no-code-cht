@@ -6,17 +6,47 @@
   "license": "AGPL-3.0",
   "type": "module",
   "workspaces": [
+    "packages/*",
     "schemas",
     "agents/*"
   ],
   "scripts": {
     "build": "tsc --build",
-    "test": "node --test --import tsx 'agents/**/test/*.test.ts' 'schemas/test/*.test.ts'",
-    "typecheck": "tsc --build --noEmit"
+    "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json",
+    "check": "npm run typecheck && npm run check --workspaces --if-present",
+    "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",
+    "test:agents": "node --test --import tsx 'agents/**/test/*.test.ts' 'schemas/test/*.test.ts'",
+    "test:infra": "tsx --test tests/infra/*.test.ts",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy BreakingBarriersStorage --outputs-file outputs.json",
+    "destroy": "cdk destroy BreakingBarriersStorage",
+    "preflight": "tsx scripts/preflight.ts",
+    "teardown": "tsx scripts/teardown.ts",
+    "publish-samples": "npm run build --workspace @vera/artifact-storage && tsx examples/publish-samples.ts",
+    "synth:storage": "cdk synth BreakingBarriersStorage",
+    "synth:workflow": "cdk synth vera-workflow-data",
+    "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json",
+    "db:local:up": "docker compose -f packages/workflow-data/compose.yaml up -d",
+    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@aws-sdk/client-cloudformation": "^3.1161.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sts": "^3.1161.0",
+    "@vera/artifact-storage": "0.1.0",
+    "@vera/workflow-data": "0.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.0.0",
+    "aws-cdk": "^2.0.0",
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0",
+    "prettier": "^3.9.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
