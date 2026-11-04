@@ -1,0 +1,435 @@
+[
+  {
+    "name": "valid new_pathway",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "valid edit",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "edit",
+      "baseline": {
+        "snapshotId": "s1",
+        "snapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "name": "defaults: constraints and flags omitted",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "edit without baseline",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "edit"
+    }
+  },
+  {
+    "name": "new_pathway without guideline",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway"
+    }
+  },
+  {
+    "name": "unknown changeType",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "guideline_upload",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "submittedBy role not program_officer",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "admin",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "submittedAt not ISO datetime",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "yesterday",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "empty pathway title",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "p",
+        "title": ""
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "specVersion 2",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 2,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "missing changeId",
+    "expect": "reject",
+    "input": {
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "empty requestText",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "unknown extra property kept, not rejected",
+    "expect": "accept",
+    "docDisagrees": true,
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      },
+      "surprise": "x"
+    }
+  },
+  {
+    "name": "changeId longer than 128 chars",
+    "expect": "accept",
+    "docDisagrees": true,
+    "input": {
+      "changeId": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "snapshotHash not 64 lowercase hex",
+    "expect": "accept",
+    "docDisagrees": true,
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "Build the pathway.",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "edit",
+      "baseline": {
+        "snapshotId": "s1",
+        "snapshotHash": "abc"
+      }
+    }
+  },
+  {
+    "name": "whitespace-only requestText",
+    "expect": "accept",
+    "docDisagrees": true,
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "   ",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "requestText longer than 4000 chars",
+    "expect": "accept",
+    "docDisagrees": true,
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "specVersion": 1,
+      "pathway": {
+        "id": "child-cough",
+        "title": "Child cough"
+      },
+      "requestText": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "constraints": [],
+      "flags": [],
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "submittedAt": "2026-11-04T10:00:00.000Z",
+      "changeType": "new_pathway",
+      "guideline": {
+        "docId": "g/imci.pdf",
+        "title": "IMCI",
+        "version": "2014"
+      }
+    }
+  }
+]
