@@ -281,7 +281,7 @@ This split means the container that actually runs arbitrary build/test tooling n
 | Access | Systems Manager Session Manager | No open SSH/admin ports; IMDSv2 required, hop limit 2 |
 | Logs/traces | CloudWatch | Every model call and container log; gives cost-per-run |
 | UI sign-in | Cognito + ALB (optional) | Session Manager port forwarding is the event-day fallback |
-| Infrastructure as code | Terraform (Medic's standard) or CDK in TypeScript | One deploy command, one teardown command |
+| Infrastructure as code | AWS CDK in TypeScript | One deploy command (`cdk deploy`), one teardown command (`cdk destroy`) |
 | Network | VPC, private subnets for compute, public subnet only for an optional ALB | Gateway→internal-tools connectivity should be smoke-tested on day 1 (it is not automatic) |
 
 **Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Amazon Textract, Lambda for application logic, Fargate, SageMaker, RDS/Aurora, Kinesis/MSK, model endpoints outside Bedrock, public S3 buckets, open SSH/admin ports.
@@ -367,7 +367,7 @@ Expected outcomes are always computed from the approved snapshot — never by a 
 - [ ] Smoke-test AgentCore Gateway → internal-tools connectivity on day 1 — it is not automatic and was flagged as unverified in more than one source doc.
 - [x] ~~Decide the approver UX: decision table, flowchart, chat, or a combination.~~ **Decided: a structured review view (decision table/flowchart over the LogicModel), not chat.** The officer's request stays a single form-style submission into Intake; the clinician's review stays a single static view, not a conversation. See Decisions Log #14.
 - [ ] Write the ~12 golden cases once the pathway is locked; get Medic's confirmation in the clinician role.
-- [ ] IAM role design per component (one role per agent via AgentCore Identity; separate orchestrator, det-services, deployer, and UI roles) — draft Terraform/CDK modules against §14's service table.
+- [ ] IAM role design per component (one role per agent via AgentCore Identity; separate orchestrator, det-services, deployer, and UI roles) — draft CDK constructs against §14's service table.
 - [ ] Curate the real CHT-conventions primer content for the chosen pathway (the Change Planner Agent's `primer.ts` currently ships placeholder text — see its README).
 - [ ] Confirm with whoever builds the Drafting Agent that it prompt-stuffs the guideline rather than calling a Knowledge Base tool (§7 note).
 
