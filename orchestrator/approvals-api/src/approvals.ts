@@ -108,6 +108,9 @@ export async function completeApproval(
   // conversation, so we bind it to the exact summary captured when the wait began).
   await deps.sendTaskSuccess(token.taskToken, {
     ...token.summary,
+    // The state machine branches on `decision` ("approve" | "reject"), the same
+    // field the workflow-data CallbackPayload uses.
+    decision: approved ? "approve" : "reject",
     approved,
     notes: request.notes ?? null,
     approvedBy: request.approverId,

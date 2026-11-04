@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { config } from "./config.js";
-import { IntakeAgentError, createBedrockConverse, runIntakeAgent } from "./agent.js";
+import { createBedrockConverse } from "./agent.js";
+import { handleIntake } from "./handler.js";
 import { createDirectTools } from "./tools.js";
 
 const app = Fastify({ logger: true });
@@ -10,25 +11,20 @@ const converse = createBedrockConverse();
 app.get("/healthz", async () => ({ status: "ok" }));
 
 /**
- * Contract for whoever builds the orchestrator (Step Functions): this is
- * the one entrypoint it calls for the "Intake" state. On success it
- * returns the persisted StructuredSpec (changeId included). On failure it
- * returns 422 with an error the orchestrator should surface to a human —
- * this agent never retries past its own bounded limits, and the caller
- * must not either.
+ * Orchestrator entrypoint for the Intake state. Takes the shared AgentRequest
+ * envelope and always answers 200 with an AgentResult (`ok: true` with the
+ * StructuredSpec, or `ok: false` with a failure the orchestrator surfaces to a
+ * human). A non-2xx response only ever means this service is broken.
  */
 app.post("/intake", async (request, reply) => {
-  try {
-    const spec = await runIntakeAgent(request.body, tools, converse);
-    return reply.code(200).send(spec);
-  } catch (err) {
-    if (err instanceof IntakeAgentError) {
-      request.log.warn({ err }, "intake agent could not produce a valid spec");
-      return reply.code(422).send({ error: err.message });
-    }
-    request.log.error({ err }, "unexpected intake agent failure");
-    return reply.code(500).send({ error: "internal error" });
+  const result = await handleIntake(request.body, tools, converse);
+  if (!result.ok) {
+    request.log.warn(
+      { changeId: result.changeId, runId: result.runId, reason: result.failure.reason },
+      "intake agent returned a failure",
+    );
   }
+  return reply.code(200).send(result);
 });
 
 app

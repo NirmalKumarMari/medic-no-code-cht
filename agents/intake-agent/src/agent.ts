@@ -14,6 +14,7 @@ import {
   type StructuredSpec,
 } from "./schema.js";
 import type { Tools } from "./tools.js";
+import type { AgentFailureReason } from "@vera/schemas";
 
 /**
  * Raised whenever the agent cannot produce a valid StructuredSpec after its
@@ -24,6 +25,8 @@ import type { Tools } from "./tools.js";
 export class IntakeAgentError extends Error {
   constructor(
     message: string,
+    /** Maps onto the shared AgentFailureReason in the result envelope. */
+    readonly reason: AgentFailureReason = "internal_error",
     readonly detail?: unknown,
   ) {
     super(message);
@@ -63,6 +66,24 @@ export async function runIntakeAgent(
   tools: Tools,
   converse: ConverseFn,
 ): Promise<StructuredSpec> {
+  return (await runIntakeAgentWithModel(rawRequest, tools, converse)).spec;
+}
+
+/** The spec plus the model whose response produced it (authoring-agents Req 6.7). */
+export interface IntakeRun {
+  spec: StructuredSpec;
+  /** Bedrock inference profile id of the call that returned the accepted spec. */
+  modelId: string;
+  /** True when that model was the configured escalation model, not the primary. */
+  escalated: boolean;
+}
+
+/** Same run as `runIntakeAgent`, also reporting which model produced the spec. */
+export async function runIntakeAgentWithModel(
+  rawRequest: unknown,
+  tools: Tools,
+  converse: ConverseFn,
+): Promise<IntakeRun> {
   const request: IntakeRequest = IntakeRequestSchema.parse(rawRequest);
 
   // Caller-bug checks (authoring-agents Req 2.4 / 2.7): fail before any model
@@ -73,6 +94,7 @@ export async function runIntakeAgent(
   ) {
     throw new IntakeAgentError(
       `${request.requestKind} requests must include pathway, guideline name, and guideline version`,
+      "invalid_request",
     );
   }
   if (
@@ -81,6 +103,7 @@ export async function runIntakeAgent(
   ) {
     throw new IntakeAgentError(
       "plain_language_edit requests must include baselineSnapshotHash and editText",
+      "invalid_request",
     );
   }
 
@@ -92,25 +115,34 @@ export async function runIntakeAgent(
   let repairAttempts = 0;
 
   while (true) {
-    const response = await converse({
-      modelId,
-      system: [{ text: SYSTEM_PROMPT }],
-      messages,
-      inferenceConfig: { temperature: 0, maxTokens: 2048 },
-      ...(config.bedrock.guardrailId
-        ? {
-            guardrailConfig: {
-              guardrailIdentifier: config.bedrock.guardrailId,
-              guardrailVersion: config.bedrock.guardrailVersion,
-              trace: "enabled",
-            },
-          }
-        : {}),
-    });
+    let response: ConverseCommandOutput;
+    try {
+      response = await converse({
+        modelId,
+        system: [{ text: SYSTEM_PROMPT }],
+        messages,
+        inferenceConfig: { temperature: 0, maxTokens: 2048 },
+        ...(config.bedrock.guardrailId
+          ? {
+              guardrailConfig: {
+                guardrailIdentifier: config.bedrock.guardrailId,
+                guardrailVersion: config.bedrock.guardrailVersion,
+                trace: "enabled",
+              },
+            }
+          : {}),
+      });
+    } catch (err) {
+      throw new IntakeAgentError(
+        `Bedrock call failed on ${modelId}: ${(err as Error).name ?? "Error"}`,
+        "model_error",
+      );
+    }
 
     if (response.stopReason === "guardrail_intervened" || response.stopReason === "content_filtered") {
       throw new IntakeAgentError(
         `Bedrock Guardrails blocked this request (stopReason=${response.stopReason}); surfacing to a human rather than retrying`,
+        "screening_blocked",
       );
     }
 
@@ -154,8 +186,19 @@ export async function runIntakeAgent(
       continue;
     }
 
-    await tools.writeSpecDraft(parsed.data);
-    return parsed.data;
+    try {
+      await tools.writeSpecDraft(parsed.data);
+    } catch (err) {
+      throw new IntakeAgentError(
+        `Spec draft write failed: ${(err as Error).name ?? "Error"}`,
+        "tool_error",
+      );
+    }
+    return {
+      spec: parsed.data,
+      modelId,
+      escalated: modelId !== config.bedrock.draftModelId,
+    };
   }
 }
 
@@ -167,6 +210,7 @@ async function repairOrThrow(
   if (repairAttempts >= config.agent.maxSchemaRepairAttempts) {
     throw new IntakeAgentError(
       `Intake agent failed schema validation after ${repairAttempts} repair attempts: ${errorText}`,
+      "output_invalid",
     );
   }
   messages.push({

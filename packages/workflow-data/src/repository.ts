@@ -242,8 +242,9 @@ export class WorkflowRepository {
       createdAt: this.stamp(), idempotencyKey: input.idempotencyKey, buildId: token.buildId, artifactDigest: token.artifactDigest, targetId: token.targetId,
       expectedPriorDeploymentId: token.expectedPriorDeploymentId, acknowledgedFlagIds: acknowledged, historyFlags: row.historyFlags ?? [],
       validationReport: row.validationReport, testReport: row.testReport, diffReport: row.diffReport, executionArn: row.executionArn });
+    // `notes` is the same value stored on the decision record; a reject always has one (MISSING_NOTES above).
     const payload = clean({ changeId: row.changeId, snapshotHash: row.snapshotHash, gate: input.gate, decisionId: input.decisionId,
-      decision: input.decision, buildId: token.buildId, artifactDigest: token.artifactDigest });
+      decision: input.decision, buildId: token.buildId, artifactDigest: token.artifactDigest, notes: input.notes || undefined });
     const patch: Item = { state: input.decision === 'approve' ? `${input.gate}_approved` : 'rejected', callbackPending: true };
     if (input.decision === 'approve') patch[`${input.gate}DecisionKey`] = decisionKey;
     const rejectedRules: Write[] = [];

@@ -15,20 +15,25 @@ npm install   # from the repo root (this is a workspace package)
 npm run dev
 ```
 
-`POST /intake` with a body matching `IntakeRequestSchema` (see `src/schema.ts`):
+`POST /intake` with the shared agent envelope (`@vera/schemas` `agent-envelope.ts`); `payload` matches `IntakeRequestSchema` (see `src/schema.ts`) and its `changeId` must equal the envelope's:
 
 ```json
 {
   "changeId": "01JREQUEST000000000000000",
-  "requestKind": "guideline_upload",
-  "pathway": "child cough and fast breathing",
-  "guideline": { "name": "WHO IMCI", "version": "2023" },
-  "requestText": "Draft a pathway from the attached WHO IMCI guideline for child cough and fast breathing.",
-  "submittedBy": { "role": "program_officer", "userId": "officer-1" }
+  "runId": "3f2a9c1e-0b7d-4f7e-9a51-2d3c4b5a6f70",
+  "tenant": "demo-tenant",
+  "payload": {
+    "changeId": "01JREQUEST000000000000000",
+    "requestKind": "guideline_upload",
+    "pathway": "child cough and fast breathing",
+    "guideline": { "name": "WHO IMCI", "version": "2023" },
+    "requestText": "Draft a pathway from the attached WHO IMCI guideline for child cough and fast breathing.",
+    "submittedBy": { "role": "program_officer", "userId": "officer-1" }
+  }
 }
 ```
 
-Returns the persisted `StructuredSpec` (200) or a structured error (422) that the caller must surface to a human — this agent does not retry past its own bounded limits (one call plus up to 2 schema-repair attempts; see `src/config.ts`).
+Always answers 200 with an `AgentResult`: `{ agent: "intake", changeId, runId, tenant, ok: true, output: StructuredSpec }`, or `ok: false` with a `failure` (`invalid_request`, `screening_blocked`, `output_invalid`, `model_error`, `tool_error`, `internal_error`) that the caller must surface to a human. This agent does not retry past its own bounded limits (one call plus up to 2 schema-repair attempts; see `src/config.ts`).
 
 ## Tests
 
@@ -41,4 +46,4 @@ Covers: happy path (one call, request fields win over the model), edit copy-thro
 - **Output contract:** `StructuredSpec`, imported from `@vera/schemas` (single source of truth; master is `.kiro/specs/logic-model-snapshots` Requirement 4). The Drafting Agent reads the same type.
 - **Side effect:** only an idempotent draft spec-store write (`src/tools.ts`) — no retrieval/KB tool (ADR-011). Implemented today as direct AWS calls (`createDirectTools()`); once AgentCore Gateway exists, swap that one function for a Gateway-backed implementation and `agent.ts` does not change.
 - **Storage:** writes the raw spec JSON to S3 (`SPECS_S3_BUCKET`/`SPECS_S3_PREFIX`) and an index row to the `Changes` DynamoDB table (`changeId` PK, `sk = "spec"`) — see design §14.
-- **Orchestrator contract:** exposes `POST /intake` so the Step Functions orchestrator can call this container for the "Intake" state.
+- **Orchestrator contract:** exposes `POST /intake` so the Step Functions orchestrator can call this container for the "Intake" state. The orchestrator stores the result at `$.intake` and routes on `$.intake.output.requestKind`.

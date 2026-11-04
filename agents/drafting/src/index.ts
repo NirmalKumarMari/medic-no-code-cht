@@ -25,6 +25,16 @@ export const AGENT_LIMITS = {
   maxModelTurns: 1,
 } as const;
 
+/** A human rejection the re-draft must address. */
+export interface DraftingRevision {
+  /** Which approval gate rejected the previous draft. */
+  gate: "content" | "deploy";
+  /** The reviewer's rejection notes, verbatim. */
+  notes: string;
+  /** The LogicModel that was rejected. */
+  previousLogicModel: LogicModel;
+}
+
 export interface DraftingInput {
   spec: StructuredSpec;
   /**
@@ -32,6 +42,8 @@ export interface DraftingInput {
    * (design doc §8 / ADR-011). Callers supply it; there is no retrieval step.
    */
   guidelineText: string;
+  /** Present only on a re-draft after a human rejection. */
+  revision?: DraftingRevision;
 }
 
 export interface AgentUsage {
@@ -88,7 +100,7 @@ export class DraftingAgent {
   async draft(input: DraftingInput): Promise<DraftingResult> {
     let modelTurns = 0;
 
-    const prompt = buildPromptParts(input.spec, input.guidelineText);
+    const prompt = buildPromptParts(input.spec, input.guidelineText, input.revision);
 
     // ---- Guardrail screening (BEFORE the model sees anything) ----
     // Both entry points for personal data — the synthesized spec text and the

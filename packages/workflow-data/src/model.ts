@@ -69,6 +69,8 @@ export interface TestSummary {
 export interface CallbackPayload {
   changeId: string; snapshotHash: string; gate: Gate; decisionId: string;
   decision: 'approve' | 'reject'; buildId?: string; artifactDigest?: string;
+  /** The reviewer's note, sent so the workflow can pass a rejection's reason to the re-draft. Always present on a reject. */
+  notes?: string;
 }
 export class WorkflowDataError extends Error {
   constructor(public code: string, message: string) { super(message); this.name = 'WorkflowDataError'; }
