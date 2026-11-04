@@ -17,7 +17,7 @@ export interface AppOptions {
   authenticate: Authenticate;
   mode: "local" | "aws";
   origins: string[];
-  authConfig: { mode: "local" | "cognito"; domain?: string; clientId?: string };
+  authConfig: { mode: "local" | "cognito" | "demo"; domain?: string; clientId?: string };
 }
 function encode(cursor?: Item) {
   return cursor
@@ -62,6 +62,8 @@ export function createApp(o: AppOptions) {
     reply
       .header("Cache-Control", "no-store")
       .header("X-Content-Type-Options", "nosniff");
+    if (o.authConfig.mode === "demo" && request.method !== "GET" && request.url.startsWith("/api/reviews/"))
+      throw new HttpError(403, "DEMO_ONLY", "Workflow decisions require an individual signed-in reviewer.");
     const origin = request.headers.origin;
     if (origin && !o.origins.includes(origin))
       throw new HttpError(403, "FORBIDDEN", "This origin is not allowed.");

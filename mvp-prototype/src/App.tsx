@@ -332,7 +332,7 @@ export default function App() {
           <>
             <section className="card" aria-label="Workspace">
               <p>
-                Signed in as <strong>{session.subject}</strong> ·{" "}
+                {config?.mode === "demo" ? "Demo workspace · no sign-in required" : "Signed in as"} <strong>{config?.mode === "demo" ? "" : session.subject}</strong> ·{" "}
                 {session.groups.join(", ")}
               </p>
               {session.storage === "local" && (

@@ -9,7 +9,7 @@ export interface Session {
   storage: "local" | "aws";
 }
 export interface AuthConfig {
-  mode: "local" | "cognito";
+  mode: "local" | "cognito" | "demo";
   domain?: string;
   clientId?: string;
 }
@@ -165,6 +165,13 @@ export async function signIn(config: AuthConfig) {
   location.assign(url);
 }
 export async function completeSignIn(config: AuthConfig) {
+  if (config.mode === "demo") {
+    sessionStorage.removeItem("vera-access-token");
+    sessionStorage.removeItem("vera-pkce");
+    const params = new URLSearchParams(location.search);
+    if (params.has("code") || params.has("error")) history.replaceState(null, "", import.meta.env.BASE_URL);
+    return;
+  }
   const params = new URLSearchParams(location.search);
   if (!params.has("code") && !params.has("error")) return;
   const saved = JSON.parse(sessionStorage.getItem("vera-pkce") ?? "null");

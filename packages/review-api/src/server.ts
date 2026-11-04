@@ -92,6 +92,12 @@ if (mode === "local") {
     bucket,
     required("KMS_KEY_ARN"),
   );
+  const authMode = z.enum(["cognito", "demo"]).parse(env.REVIEW_AUTH_MODE ?? "demo");
+  if (authMode === "demo") {
+    const tenant = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/).parse(env.REVIEW_DEMO_TENANT ?? "workshop-049197632966");
+    authenticate = async () => ({ subject: "demo-program-officer", groups: ["program_officer"], tenants: [tenant] });
+    authConfig = { mode: "demo" };
+  } else {
   const domain = new URL(required("COGNITO_DOMAIN"));
   if (
     domain.protocol !== "https:" ||
@@ -113,6 +119,8 @@ if (mode === "local") {
     required("COGNITO_CLIENT_ID"),
     memberships,
   );
+  authConfig = { mode: "cognito", domain: domain.origin, clientId: required("COGNITO_CLIENT_ID") };
+  }
   const guardrail = new GuardrailScreen(
     new BedrockRuntimeClient({ region }),
     required("GUARDRAIL_ID"),
@@ -135,11 +143,7 @@ if (mode === "local") {
       throw error;
     }
   };
-  authConfig = {
-    mode: "cognito",
-    domain: domain.origin,
-    clientId: required("COGNITO_CLIENT_ID"),
-  };
+
 }
 const workflow = new WorkflowRepository({
   client,
@@ -170,5 +174,5 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
   });
 await app.listen({ host, port });
 console.log(
-  `Vera review API listening on ${host}:${port} (${mode === "local" ? "LOCAL: DynamoDB Local + local files; no AWS or clinical approvals fabricated" : "AWS: Cognito + DynamoDB + S3"})`,
+  `Vera review API listening on ${host}:${port} (${mode === "local" ? "LOCAL: DynamoDB Local + local files; no AWS or clinical approvals fabricated" : "AWS: DynamoDB + S3"})`,
 );
