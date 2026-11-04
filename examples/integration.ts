@@ -1,15 +1,11 @@
-import { ArtifactStore } from "../src/artifacts.js";
-import { PromptContextBuilder } from "../src/prompt-context.js";
+import { ArtifactStore, PromptContextBuilder } from "@vera/artifact-storage";
 import type {
   ArtifactRef,
   PublishedSource,
   PromptContextRequest,
   PromptMode,
-} from "../src/contracts.js";
-import {
-  snapshotBundleSchema,
-  type SnapshotBundle,
-} from "../packages/workflow-data/src/model.js";
+} from "@vera/artifact-storage/contracts";
+import { snapshotBundleSchema, type SnapshotBundle } from "@vera/workflow-data";
 
 /** Backend reserves the real workflow identity and validates the author separately. */
 export async function registerSnapshot(

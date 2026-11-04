@@ -2,6 +2,10 @@
 
 Canonical source: the revised FINAL Solution Design. One guideline is passed in full to Drafting; one reviewed CHT primer is passed to Change Planner. There is no KB, vector index, embedding, indexed corpus, agent retrieval tool, Cross-Check agent or AgentCore Memory.
 
+## Workspace packages
+
+Install once with root `npm ci`; root `npm run build` builds `@vera/artifact-storage` before `@vera/workflow-data`. Source/artifact helpers live in `packages/artifact-storage/src/`; DynamoDB repositories live in `packages/workflow-data/src/`. Import public package exports. Both use `ArtifactRef`/`artifactRefSchema` from `@vera/artifact-storage/contracts`; workflow-data preserves its existing re-exports. Infrastructure stays in the root `infra/` folder.
+
 ## Source/context contract
 
 `SourcePublisher.publish(source, rawBytes, format)` returns `{ source, document, provenance }`. Source metadata includes type (`guideline`, `cht-primer`, or underlying pinned technical reference), ID/version, original source hash, URL/path, real reviewer/time and section/page/table provenance where available. Do not invent page numbers. ArtifactRef is `{ bucket, key, versionId, sha256, contentType }`; artifact hashes are exact-byte SHA-256 and are distinct from the canonical snapshot hash.

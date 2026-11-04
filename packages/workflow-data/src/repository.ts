@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand,
 import { artifactRefSchema, canonicalJson, digestSchema, hasRole, idSchema, requireData, safeDecision, sha256, snapshotBundleSchema, snapshotHash, validateContext,
   WorkflowDataError, type ArtifactRef, type Change, type DecisionInput, type Gate, type HumanContext, type Item, type SnapshotBundle, type Tables, type TestSummary, type WorkflowContext } from './model.js';
 import { fingerprintRules, type HistoryFlag, type RuleFingerprint } from './fingerprints.js';
-import type { SnapshotVerifier } from './artifacts.js';
+import type { SnapshotVerifier } from './snapshot-verifier.js';
 
 type Write = NonNullable<TransactWriteCommandInput['TransactItems']>[number];
 export interface RepositoryOptions {

@@ -25,7 +25,7 @@ Rule history hashes structural `when` + `then` + optional `followUp`, normalizin
 
 ## Implemented modules
 
-- Root `src/`, `tests/`: artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).
+- [packages/artifact-storage](packages/artifact-storage/README.md): artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).
 - [infra/](infra/README.md): one CDK app with separate storage and workflow-data stack modules. All infrastructure definitions and CDK dependencies live at the repository root.
 - [packages/workflow-data](packages/workflow-data/README.md): four-table runtime repositories, fingerprint history, human decisions and callback recovery. [Status](packages/workflow-data/docs/STATUS.md), [integration contract](packages/workflow-data/docs/INTEGRATION.md).
 
@@ -33,23 +33,32 @@ These are libraries/IaC and an internal callback worker. The UI, Cognito verifie
 
 ## Verify locally
 
-Node 22+, npm and Docker are required. From the repository root:
+Node 22+, npm and Docker are required. This is an npm workspace with one root `package-lock.json`. Install once at the repository root:
 
 ```sh
 npm ci
 npm run check
+npm run db:local:up
 npm test
 npm run synth
-cd packages/workflow-data
-npm ci
-docker compose up -d
-npm run build
-npm test
+npm run db:local:down
 ```
 
-Root `npm run synth` generates both templates in `cdk.out/`. Root tests cover both stacks; the workflow package's `synth` command forwards to the same root app for compatibility.
+`npm run build` builds artifact-storage first, then workflow-data. `npm run check` builds both and type-checks the packages, infrastructure, examples and scripts. `npm test` builds both and runs infrastructure tests plus both package suites. The DynamoDB tests need the local container started above. `db:local:down` removes that disposable container and its in-memory test data.
 
-The package's DynamoDB tests use loopback-only synthetic local state. No command above publishes sources, seeds AWS/CHT or invokes models. Source and artifact SDK clients are stubbed in the root tests. See each module's documentation for explicit opt-in deployment. Keep offline build containers credential-free and separate from the deploy role. All resources use the project's AWS `us-west-2` environment and tag conventions.
+Root `npm run synth` generates both templates in `cdk.out/`. Infrastructure tests live in `tests/infra/`; runtime tests live next to each package under `tests/`. The workflow package's `synth` command forwards to the same root app for compatibility.
+
+The DynamoDB tests use loopback-only synthetic local state. These commands do not publish sources, seed AWS/CHT or invoke models. Artifact-storage tests use fake SDK clients. See each module's documentation for explicit opt-in deployment. Keep offline build containers credential-free and separate from the deploy role. All resources use the project's AWS `us-west-2` environment and tag conventions.
+
+## Package imports
+
+```ts
+import { ArtifactStore, SourcePublisher, PromptContextBuilder } from '@vera/artifact-storage';
+import { artifactRefSchema, type ArtifactRef } from '@vera/artifact-storage/contracts';
+import { WorkflowRepository, s3SnapshotVerifier } from '@vera/workflow-data';
+```
+
+Imports resolve to built JavaScript/declarations; run `npm run build` before consuming them. The contracts subpath is the shared `ArtifactRef` schema/type and does not import AWS SDK clients. Workflow-data re-exports that contract to preserve its existing public API. Import public package exports rather than another package's source files.
 
 ## Deployment and retention
 

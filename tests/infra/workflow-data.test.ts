@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { WorkflowDataStack } from "../infra/workflow-data-stack.js";
+import { WorkflowDataStack } from "../../infra/workflow-data-stack.js";
 import { test } from "node:test";
 // Exercise CLI metadata defaults as well as the original programmatic synth path.
 const app = new App({

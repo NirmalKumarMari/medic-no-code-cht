@@ -1,6 +1,6 @@
 # Database implementation status — revised November 4, 2026
 
-Yash's workflow persistence implementation is in `packages/workflow-data/` on the `database` branch, alongside the teammate's existing artifact/storage implementation at the repository root. It is added on top of her `b189fc2` commit. The November 4 revision updates both components to the user's new canonical design. This change targets `database` only.
+Yash's workflow persistence implementation is in `packages/workflow-data/` on the `database` branch, alongside the teammate's artifact/storage implementation, now in `packages/artifact-storage/`. It is added on top of her `b189fc2` commit. The November 4 revision updates both components to the user's new canonical design. This change targets `database` only.
 
 ## Deployed and verified
 
@@ -28,13 +28,17 @@ Use [INTEGRATION.md](INTEGRATION.md) for the teammate's exact artifact/prompt-co
 
 AgentCore Memory and semantic history are removed. Exact rejected-rule history is implemented in the existing Approvals table and refreshed during Logic Checks/content review. No table/index provisioning change is needed for these materialized key records. Source storage is simplified to one S3 artifact bucket plus screened full-context loading. See the root revision note for live resource inventory and remaining deployment work.
 
+## Workspace organization
+
+The root npm workspace now owns the only dependency lockfile. Run `npm ci`, `npm run build`, `npm run check` and `npm test` at the repository root; start DynamoDB Local before full tests. Artifact-storage builds first so workflow-data can consume its shared contract. This is a source/package reorganization, with no table/key/hash-format or cloud deployment change.
+
 ## Files and operations
 
-- `src/`: schemas/hash functions, S3 snapshot verifier, workflow repository, durable callback dispatcher and environment configuration.
+- `src/`: schemas/hash functions, `snapshot-verifier.ts`, workflow repository, durable callback dispatcher and environment configuration. `ArtifactRef` is imported from `@vera/artifact-storage/contracts` and re-exported for compatibility.
 - Repository-root `infra/workflow-data-stack.ts`: four-table CDK module, loaded by the single root `infra/app.ts`; current generated templates live in root `cdk.out/`. The stack name, table names and logical IDs are preserved. Historical `.artifacts/` templates are no longer the synthesis output.
 - `scripts/dispatch-callbacks.ts`: internal EC2/scheduler callback worker; no HTTP listener.
 - `scripts/aws-smoke.ts`: explicit opt-in real AWS storage probe.
-- `test/`: synthetic fixtures and current consistency/history checks.
+- `tests/`: synthetic fixtures and current consistency/history checks. Root `tests/infra/` covers CDK.
 - `.env.example`: table names/tenant/artifact-bucket configuration, no credentials.
 
 The tables are retained and deletion-protected. Their storage/PITR billing persists until deliberately cleaned up by the account owner. The README explains retention/cleanup; no table or cloud data was deleted.

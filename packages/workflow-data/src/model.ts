@@ -1,14 +1,12 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { artifactRefSchema, type ArtifactRef } from '@vera/artifact-storage/contracts';
 
 export const idSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/);
 export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
-export const artifactRefSchema = z.object({
-  bucket: z.string().min(3), key: z.string().min(1),
-  versionId: z.string().min(1).refine(v => v !== 'null', 'A versioned object is required'),
-  sha256: digestSchema, contentType: z.string().min(1),
-}).strict();
-export type ArtifactRef = z.infer<typeof artifactRefSchema>;
+// Shared storage contract; re-exported here to preserve the workflow package API.
+export { artifactRefSchema };
+export type { ArtifactRef };
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export const jsonSchema: z.ZodType<Json> = z.lazy(() => z.union([

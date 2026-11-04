@@ -2,11 +2,13 @@
 
 Implements revised design §§8–9 and 14. There is one private versioned SSE-KMS artifact bucket and one retained KMS key. The old second source bucket, Knowledge Base/data sources, S3 Vectors bucket/index, embedding access and synchronization jobs are absent from the current template. Bedrock Guardrails and isolated trusted worker roles remain.
 
+Runtime code lives in `packages/artifact-storage/`, exposed as `@vera/artifact-storage` and `@vera/artifact-storage/contracts`. The latter owns the shared `ArtifactRef` schema used by workflow-data. Install dependencies once at the repository root and build before importing packages.
+
 ## Source and prompt APIs
 
 - `ArtifactStore`: conditional immutable writes, version/hash/content-type/KMS verification, manifest verification and version listing. ArtifactRef is `{ bucket, key, versionId, sha256, contentType }`; VersionId must be real and non-null.
-- `SourcePublisher` (`src/sources.ts`): a trusted human-reviewed source upload. Verify original bytes/hash/origin, enforce pinned commits for CHT docs/reference configs, screen source metadata/text, and write raw source, complete readable text and provenance under `docs/<sourceId>/<version>/`. No chunking, metadata sidecar, indexing or sync job follows publication.
-- `PromptContextBuilder` (`src/prompt-context.ts`): trusted pre-inference code selects **one exact guideline** for `drafting`, or **one explicitly curated `cht-primer`** for `change_planner`. It re-reads the pinned provenance/raw/document versions, checks exported text against the original, screens the full input again, persists a complete context receipt and awaits the injected durable DynamoDB audit callback. It returns exact text and references only after audit success.
+- `SourcePublisher` (`packages/artifact-storage/src/sources.ts`): a trusted human-reviewed source upload. Verify original bytes/hash/origin, enforce pinned commits for CHT docs/reference configs, screen source metadata/text, and write raw source, complete readable text and provenance under `docs/<sourceId>/<version>/`. No chunking, metadata sidecar, indexing or sync job follows publication.
+- `PromptContextBuilder` (`packages/artifact-storage/src/prompt-context.ts`): trusted pre-inference code selects **one exact guideline** for `drafting`, or **one explicitly curated `cht-primer`** for `change_planner`. It re-reads the pinned provenance/raw/document versions, checks exported text against the original, screens the full input again, persists a complete context receipt and awaits the injected durable DynamoDB audit callback. It returns exact text and references only after audit success.
 
 This is not an agent-facing tool or a search service. Never expose source selection, tenant or source pins as model-controlled arguments. The authenticated workflow selects them. Source text stays stable across requests for the caller's model prompt cache; volatile request IDs and audit metadata are not inserted into that text. The model adapter must put this complete text into its actual prompt and use only that model's supported caching mechanism. This storage module does not claim to enable provider-side prompt caching itself.
 
@@ -25,7 +27,9 @@ Source writer: `docs/*` publication. Prompt-context worker: versioned `docs/*` r
 ```sh
 npm ci
 npm run check
+npm run db:local:up
 npm test
+npm run db:local:down
 npm run synth
 # With an existing authorized AWS session and all real agent role names:
 npm run preflight
@@ -39,7 +43,7 @@ Review the synthesized change set before an update to an already deployed stack.
 
 `examples/publish-samples.ts` is an explicit upload example, never run by tests. It uses `ARTIFACT_BUCKET`, `KMS_KEY_ARN`, `GUARDRAIL_ID`, a published numeric `GUARDRAIL_VERSION`, and actual stable `SOURCE_REVIEWER`/`SOURCE_REVIEWED_AT`. It records exact published versions in local ignored `publications.json`. Existing CDC/CHT examples remain only smoke-test candidates. There is no `sync-sources` command. A trusted backend selects full approved input references; it does not query or rank these samples.
 
-Before production enablement, test actual S3/KMS and Guardrail permissions, use real reviewed inputs, confirm full-context model/caching limits and citation fidelity, and prove agents cannot access storage/worker credentials. Root tests use fake SDK responses and CDK assertions, not live AWS access.
+Before production enablement, test actual S3/KMS and Guardrail permissions, use real reviewed inputs, confirm full-context model/caching limits and citation fidelity, and prove agents cannot access storage/worker credentials. Artifact-storage tests use fake SDK responses; root infrastructure tests use CDK assertions. Neither accesses live AWS.
 
 ## Retention and teardown
 

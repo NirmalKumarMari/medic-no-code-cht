@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { App } from "aws-cdk-lib";
 import { Template, Match } from "aws-cdk-lib/assertions";
-import { StorageStack } from "../infra/storage-stack.js";
+import { StorageStack } from "../../infra/storage-stack.js";
 test("one private retained versioned KMS artifact bucket; no knowledge base, vector or ingestion resources", () => {
   const t = Template.fromStack(new StorageStack(new App(), "test"));
   t.resourceCountIs("AWS::S3::Bucket", 1);

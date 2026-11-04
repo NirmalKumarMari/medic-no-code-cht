@@ -6,14 +6,17 @@ The November 4 revision removes the Knowledge Base/vector/Memory architecture an
 
 ## Local verification
 
-Use Node 22 or newer and Docker. Run commands from this directory:
+Use Node 22 or newer and Docker. Install dependencies once at the **repository root**, using its shared lockfile:
 
 ```sh
 npm ci
-docker compose up -d
 npm run build
-npm test
+npm run db:local:up
+npm test --workspace @vera/workflow-data
+npm run db:local:down
 ```
+
+The root build compiles artifact-storage before workflow-data, which imports its shared contracts. Root `npm test` runs all package and infrastructure suites; root `npm run check` type-checks everything. Package runtime tests live in `tests/`.
 
 Tests are restricted to DynamoDB Local on a loopback endpoint (`http://127.0.0.1:18000` by default). They use synthetic data and a fake Step Functions transport. They do not access AWS, CHT or real clinical data. `docker compose down` stops this package's disposable local container. Local tests cover repository transactions; they do not establish correctness of clinical rules, compiler output, Cognito integration or real Step Functions callbacks.
 
@@ -62,7 +65,7 @@ const repo = new WorkflowRepository({
 });
 ```
 
-Build this package first and link it through the application's chosen workspace/package arrangement. The repository APIs are exported from `src/index.ts`; declarations are generated into `dist/src`. A root workspace/framework was deliberately not imposed on teammates.
+This package is linked by the root npm workspace. Run root `npm run build` before consumption; public repository APIs are exported from `src/index.ts` with declarations in `dist/src`. The read-only S3 integration is `src/snapshot-verifier.ts`; its public `s3SnapshotVerifier` export is unchanged. `ArtifactRef` and `artifactRefSchema` come from `@vera/artifact-storage/contracts` and remain re-exported by this package. Use supported package imports rather than cross-package source paths.
 
 **Trust boundary:** `HumanContext` must be created by the API backend from verified Cognito JWT issuer/audience/signature/expiry, verified subject, server-side tenant membership and allowlisted groups. Never accept subject, groups, tenant membership or workflow identity from an untrusted body. `WorkflowContext` comes from an authenticated internal worker bound to the actual execution ARN. TypeScript types are not authentication. Never expose the entire repository as RPC/agent tools or let callers choose arbitrary methods, table names or contexts. Apply response allowlists at the HTTP boundary and do not serialize SDK errors/request objects.
 
@@ -104,4 +107,4 @@ UI reads are tenant-scoped: `getChange`, `getSnapshot`, `listInbox`, `listDecisi
 
 ## Dependency check
 
-Runtime dependencies pass `npm audit --omit=dev`. CDK dependencies now belong only to the repository root. The root CDK development dependency bundles a `minimatch` version with moderate advisory [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). It is used only for local template synthesis; no untrusted glob input is accepted, and CDK is omitted from production installs. Track the upstream fix. Do not report a clean full development dependency audit.
+Run dependency audits from the repository root, which owns the shared workspace lockfile. CDK dependencies now belong only to the repository root. The root CDK development dependency bundles a `minimatch` version with moderate advisory [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). It is used only for local template synthesis; no untrusted glob input is accepted, and CDK is omitted from production installs. Track the upstream fix. Do not report a clean full development dependency audit.

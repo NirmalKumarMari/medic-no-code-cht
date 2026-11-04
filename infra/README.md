@@ -9,7 +9,7 @@ infra/
 └── workflow-data-stack.ts  # Four DynamoDB tables, indexes and protections
 ```
 
-The stacks retain their existing names, resource logical IDs, table names, outputs and retention settings. Moving the TypeScript files does not move AWS resources between stacks. Runtime workflow repositories remain in `packages/workflow-data/src/`; source/artifact runtime helpers remain in `src/`.
+The stacks retain their existing names, resource logical IDs, table names, outputs and retention settings. Moving the TypeScript files does not move AWS resources between stacks. Runtime workflow repositories remain in `packages/workflow-data/src/`; source/artifact runtime helpers live in `packages/artifact-storage/src/`. Shared runtime contracts are exported by `@vera/artifact-storage/contracts`.
 
 ## Commands
 
@@ -18,11 +18,11 @@ Run from the repository root with Node 22+:
 ```sh
 npm ci
 npm run check
-npm test
+npm run test:infra
 npm run synth
 ```
 
-Synthesis is local and generates both templates:
+The root `test:infra` command checks both stacks; full `npm test` also runs runtime package tests and requires DynamoDB Local (see the root README). Synthesis is local and generates both templates:
 
 - `cdk.out/BreakingBarriersStorage.template.json`
 - `cdk.out/vera-workflow-data.template.json`

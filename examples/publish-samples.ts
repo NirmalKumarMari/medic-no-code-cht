@@ -1,10 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { S3Client } from "@aws-sdk/client-s3";
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
-import { ArtifactStore } from "../src/artifacts.js";
-import { SourcePublisher } from "../src/sources.js";
-import { GuardrailScreen } from "../src/screening.js";
-import { sourceSchema } from "../src/contracts.js";
+import {
+  ArtifactStore,
+  SourcePublisher,
+  GuardrailScreen,
+} from "@vera/artifact-storage";
+import { sourceSchema } from "@vera/artifact-storage/contracts";
 function env(key: string) {
   const value = process.env[key];
   if (!value) throw Error(`Missing ${key}`);

@@ -343,11 +343,18 @@ test("Guardrail requires numeric published version and rejects interventions or 
 });
 test("existing sample catalog still matches its public source bytes; no samples are uploaded by tests", async () => {
   const catalog = JSON.parse(
-    await readFile("examples/sources/catalog.json", "utf8"),
+    await readFile(
+      new URL("../../../examples/sources/catalog.json", import.meta.url),
+      "utf8",
+    ),
   );
   for (const entry of catalog)
     assert.equal(
-      sha256(await readFile("examples/sources/" + entry.file)),
+      sha256(
+        await readFile(
+          new URL("../../../examples/sources/" + entry.file, import.meta.url),
+        ),
+      ),
       entry.sourceHash,
     );
 });

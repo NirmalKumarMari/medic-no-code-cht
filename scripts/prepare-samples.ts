@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import ts from "typescript";
-import { sha256 } from "../src/artifacts.js";
+import { sha256 } from "@vera/artifact-storage";
 // Pinned CHT commits; CDC page export is pinned by content digest in catalog.json.
 const path = "config/default/tasks.js";
 const url =

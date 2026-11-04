@@ -1,27 +1,32 @@
 {
-  "name": "breaking-barriers-storage",
+  "name": "vera-storage-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx --test tests/*.test.ts",
-    "check": "tsc --noEmit",
+    "test": "npm run build && npm run test:infra && npm run test --workspaces --if-present",
+    "check": "npm run build && tsc --noEmit && npm run check --workspaces --if-present",
     "synth": "cdk synth",
     "deploy": "cdk deploy BreakingBarriersStorage --outputs-file outputs.json",
     "destroy": "cdk destroy BreakingBarriersStorage",
     "preflight": "tsx scripts/preflight.ts",
     "teardown": "tsx scripts/teardown.ts",
-    "publish-samples": "tsx examples/publish-samples.ts",
+    "publish-samples": "npm run build --workspace @vera/artifact-storage && tsx examples/publish-samples.ts",
     "synth:storage": "cdk synth BreakingBarriersStorage",
     "synth:workflow": "cdk synth vera-workflow-data",
-    "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json"
+    "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json",
+    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data",
+    "test:infra": "tsx --test tests/infra/*.test.ts",
+    "db:local:up": "docker compose -f packages/workflow-data/compose.yaml up -d",
+    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-cloudformation": "^3.1161.0",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/client-sts": "^3.1161.0",
-    "zod": "^4.0.0"
+    "@vera/artifact-storage": "0.1.0",
+    "@vera/workflow-data": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -34,5 +39,8 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }
