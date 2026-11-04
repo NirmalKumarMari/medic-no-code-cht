@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand, type TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { artifactRefSchema, canonicalJson, digestSchema, hasRole, idSchema, requireData, safeDecision, sha256, snapshotBundleSchema, snapshotHash, validateContext,
   WorkflowDataError, type ArtifactRef, type Change, type DecisionInput, type Gate, type HumanContext, type Item, type SnapshotBundle, type Tables, type TestSummary, type WorkflowContext } from './model.js';
+import { fingerprintRules, type HistoryFlag, type RuleFingerprint } from './fingerprints.js';
 import type { SnapshotVerifier } from './artifacts.js';
 
 type Write = NonNullable<TransactWriteCommandInput['TransactItems']>[number];
@@ -76,14 +77,14 @@ export class WorkflowRepository {
     validateContext({ tenantId: ctx.tenantId, executionArn: input.executionArn, actorId: 'workflow' });
     const bundle = snapshotBundleSchema.parse(input.bundle); const artifact = artifactRefSchema.parse(input.artifact);
     await this.verifySnapshot(artifact, bundle);
-    const hash = snapshotHash(bundle); const stamp = this.stamp();
+    const hash = snapshotHash(bundle); const rules = fingerprintRules(bundle.spec); const stamp = this.stamp();
     const row: Change = { changeId: input.changeId, sk: 'META', tenantId: ctx.tenantId,
       pathwayId: input.pathwayId, authorId: ctx.subject, snapshotId: input.snapshotId, snapshotHash: hash,
       executionArn: input.executionArn, state: 'draft', version: 1, buildKind: 'release', createdAt: stamp, updatedAt: stamp,
       artifact, baselineRevision: bundle.baselineRevision, schemaVersion: bundle.schemaVersion,
       inbox: `${ctx.tenantId}#draft`, inboxSort: `${stamp}#${input.changeId}` };
     const snapshot = { ...row, sk: `SNAPSHOT#${input.snapshotId}`, bundleHash: hash, compilerVersion: bundle.compilerVersion,
-      toolchainImageDigest: bundle.toolchainImageDigest, goldenCaseVersion: bundle.goldenCaseVersion, evidenceVersions: bundle.evidenceVersions, retrievalEvidenceRefs: bundle.retrievalEvidenceRefs };
+      toolchainImageDigest: bundle.toolchainImageDigest, goldenCaseVersion: bundle.goldenCaseVersion, evidenceVersions: bundle.evidenceVersions, retrievalEvidenceRefs: bundle.retrievalEvidenceRefs, ruleFingerprints: rules };
     await this.commit([this.insert(this.tables.changes, row), this.insert(this.tables.changes, snapshot), this.event(row, 'snapshot.created', ctx.subject, { artifact, executionArn: input.executionArn })]);
     return row;
   }
@@ -95,15 +96,15 @@ export class WorkflowRepository {
     requireData(row.pathwayId === input.pathwayId, 'INVALID_REVISION', 'A revision cannot change the pathway');
     validateContext({ tenantId: ctx.tenantId, executionArn: input.executionArn, actorId: 'workflow' });
     const bundle = snapshotBundleSchema.parse(input.bundle); const artifact = artifactRefSchema.parse(input.artifact);
-    await this.verifySnapshot(artifact, bundle); const hash = snapshotHash(bundle);
+    await this.verifySnapshot(artifact, bundle); const hash = snapshotHash(bundle); const rules = fingerprintRules(bundle.spec);
     requireData(hash !== row.snapshotHash, 'UNCHANGED_SNAPSHOT', 'Identical bundle is a retry, not a new approved version');
     const patch = { snapshotId: input.snapshotId, snapshotHash: hash, authorId: ctx.subject, artifact,
       baselineRevision: bundle.baselineRevision, executionArn: input.executionArn, state: 'draft' };
-    const writes = [this.metaUpdate(row, patch, ['contentDecisionKey', 'deployDecisionKey', 'activeWaitSk', 'latestBuildId', 'latestTestId', 'callbackPending', 'requiresClinician', 'openAmbiguities', 'validationReport']),
+    const writes = [this.metaUpdate(row, patch, ['contentDecisionKey', 'deployDecisionKey', 'activeWaitSk', 'latestBuildId', 'latestTestId', 'callbackPending', 'requiresClinician', 'openAmbiguities', 'validationReport', 'historyFlags']),
       this.insert(this.tables.changes, { changeId: row.changeId, sk: `SNAPSHOT#${input.snapshotId}`, tenantId: row.tenantId,
         snapshotId: input.snapshotId, snapshotHash: hash, parentSnapshotHash: row.snapshotHash, authorId: ctx.subject,
         artifact, compilerVersion: bundle.compilerVersion, toolchainImageDigest: bundle.toolchainImageDigest,
-        goldenCaseVersion: bundle.goldenCaseVersion, evidenceVersions: bundle.evidenceVersions, retrievalEvidenceRefs: bundle.retrievalEvidenceRefs, createdAt: this.stamp() }),
+        goldenCaseVersion: bundle.goldenCaseVersion, evidenceVersions: bundle.evidenceVersions, retrievalEvidenceRefs: bundle.retrievalEvidenceRefs, ruleFingerprints: rules, createdAt: this.stamp() }),
       this.event({ ...row, snapshotHash: hash }, 'snapshot.revised', ctx.subject, { parentSnapshotHash: row.snapshotHash, artifact })];
     if (row.activeWaitSk) writes.push({ Update: { TableName: this.tables.tokens, Key: { changeId: row.changeId, sk: row.activeWaitSk },
       UpdateExpression: 'SET #status = :superseded REMOVE taskToken, callbackQueue, callbackDueAt',
@@ -116,37 +117,57 @@ export class WorkflowRepository {
     const row = await this.read(this.tables.changes, changeId, `SNAPSHOT#${snapshotId}`);
     requireData(row?.tenantId === ctx.tenantId, 'NOT_FOUND', 'Snapshot not found'); return row;
   }
+  /** Strongly consistent materialized index in Approvals; tenant + pathway scoped. */
+  async checkRuleHistory(ctx: WorkflowContext, changeId: string, hash: string): Promise<HistoryFlag[]> {
+    const row = await this.getChange(ctx, changeId); this.worker(ctx, row); this.expected(row, hash);
+    const snapshot = await this.getSnapshot(ctx, changeId, row.snapshotId);
+    const flags: HistoryFlag[] = [];
+    for (const rule of (snapshot.ruleFingerprints ?? []) as RuleFingerprint[]) {
+      const historyKey = `HISTORY#${ctx.tenantId}#${row.pathwayId}#${rule.fingerprint}`;
+      const result = await this.client.send(new QueryCommand({ TableName: this.tables.approvals, ConsistentRead: true, KeyConditionExpression: 'changeId = :key', ExpressionAttributeValues: { ':key': historyKey }, ScanIndexForward: false, Limit: 1 }));
+      for (const prior of result.Items ?? []) {
+        requireData(prior.tenantId === ctx.tenantId && prior.pathwayId === row.pathwayId && prior.fingerprint === rule.fingerprint && prior.decision === 'reject' && prior.gate === 'content', 'INTEGRITY_ERROR', 'Invalid rejection index entry');
+        flags.push({ id: `history-${sha256(`${rule.ruleId}#${prior.sourceChangeId}#${prior.decisionId}`).slice(0, 32)}`,
+          type: 'previously_rejected_rule', severity: 'high', advisory: true, ruleId: rule.ruleId, fingerprint: rule.fingerprint,
+          sourceChangeId: prior.sourceChangeId, decisionId: prior.decisionId, rejectedSnapshotHash: prior.snapshotHash, rejectedSnapshotId: prior.snapshotId, notesExcerpt: String(prior.notes).slice(0, 320), createdAt: prior.createdAt });
+      }
+    }
+    return flags;
+  }
   async recordValidation(ctx: WorkflowContext, input: { changeId: string; snapshotHash: string; passed: boolean; openAmbiguities: number; requiresClinician: boolean; report: ArtifactRef }): Promise<void> {
     const row = await this.getChange(ctx, input.changeId); this.worker(ctx, row); this.expected(row, input.snapshotHash);
     requireData(['draft', 'draft_failed', 'checked'].includes(row.state), 'INVALID_STATE', 'Validation cannot replace approved/build evidence');
     requireData(Number.isInteger(input.openAmbiguities) && input.openAmbiguities >= 0, 'INVALID_VALIDATION', 'Ambiguity count must be a non-negative integer');
     requireData(typeof input.requiresClinician === 'boolean' && typeof input.passed === 'boolean', 'INVALID_VALIDATION', 'Validation and risk routing must be explicit booleans');
     const report = artifactRefSchema.parse(input.report); const passed = input.passed && input.openAmbiguities === 0;
+    const snapshot = await this.getSnapshot(ctx, row.changeId, row.snapshotId);
+    requireData(!passed || !input.requiresClinician || snapshot.ruleFingerprints?.length > 0, 'MISSING_RULES', 'A clinical snapshot must contain explicit rules before successful validation/history checking');
+    const historyFlags = await this.checkRuleHistory(ctx, row.changeId, row.snapshotHash);
     await this.commit([this.metaUpdate(row, { state: passed ? 'checked' : 'draft_failed', requiresClinician: input.requiresClinician,
-      openAmbiguities: input.openAmbiguities, validationReport: report }),
-      this.event(row, 'validation.recorded', ctx.actorId, { passed, openAmbiguities: input.openAmbiguities, report })]);
+      openAmbiguities: input.openAmbiguities, validationReport: report, historyFlags }),
+      this.event(row, 'validation.recorded', ctx.actorId, { passed, openAmbiguities: input.openAmbiguities, report, historyFlagIds: historyFlags.map(f => f.id) })]);
   }
-  /** Adapter for the storage team's awaited RetrievalAudit.record callback. */
-  async recordRetrievalAudit(ctx: WorkflowContext, input: { changeId: string; snapshotId: string; requestId: string; queryHash: string; evidenceRef: ArtifactRef }): Promise<void> {
+  /** Adapter for the trusted prompt-context builder's awaited audit callback. */
+  async recordPromptContext(ctx: WorkflowContext, input: { changeId: string; snapshotId: string; requestId: string; contextHash: string; evidenceRef: ArtifactRef }): Promise<void> {
     const row = await this.getChange(ctx, input.changeId); this.worker(ctx, row);
-    idSchema.parse(input.snapshotId); idSchema.parse(input.requestId); digestSchema.parse(input.queryHash);
-    requireData(row.snapshotId === input.snapshotId && ['draft', 'draft_failed'].includes(row.state), 'STALE_SNAPSHOT', 'Retrieval must belong to the current unapproved draft');
+    idSchema.parse(input.snapshotId); idSchema.parse(input.requestId); digestSchema.parse(input.contextHash);
+    requireData(row.snapshotId === input.snapshotId && ['draft', 'draft_failed'].includes(row.state), 'STALE_SNAPSHOT', 'Prompt context must belong to the current unapproved draft');
     const evidenceRef = artifactRefSchema.parse(input.evidenceRef);
-    requireData(evidenceRef.key === `reports/${row.changeId}/retrieval/${input.snapshotId}/${input.requestId}.json`, 'INVALID_ARTIFACT', 'Retrieval receipt path does not match its causal identifiers');
-    const sk = `RETRIEVAL#${input.snapshotId}#${input.requestId}`;
+    requireData(evidenceRef.key === `reports/${row.changeId}/context/${input.snapshotId}/${input.requestId}.json`, 'INVALID_ARTIFACT', 'Prompt context receipt path does not match its causal identifiers');
+    const sk = `CONTEXT#${input.snapshotId}#${input.requestId}`;
     const receipt = { changeId: row.changeId, sk, tenantId: row.tenantId, snapshotId: input.snapshotId, snapshotHash: row.snapshotHash,
-      requestId: input.requestId, queryHash: input.queryHash, evidenceRef, executionArn: ctx.executionArn };
+      requestId: input.requestId, contextHash: input.contextHash, evidenceRef, executionArn: ctx.executionArn };
     const same = async () => {
       const prior = await this.read(this.tables.changes, row.changeId, sk);
       if (!prior) return false;
-      requireData(canonicalJson(prior) === canonicalJson(receipt), 'IDEMPOTENCY_CONFLICT', 'Retrieval request ID was already used for different evidence'); return true;
+      requireData(canonicalJson(prior) === canonicalJson(receipt), 'IDEMPOTENCY_CONFLICT', 'Prompt context request ID was already used for different evidence'); return true;
     };
     if (await same()) return;
     try { await this.commit([this.insert(this.tables.changes, receipt),
       { ConditionCheck: { TableName: this.tables.changes, Key: { changeId: row.changeId, sk: 'META' },
         ConditionExpression: '#v = :version AND snapshotHash = :hash', ExpressionAttributeNames: { '#v': 'version' },
         ExpressionAttributeValues: { ':version': row.version, ':hash': row.snapshotHash } } },
-      this.event(row, 'retrieval.recorded', ctx.actorId, { snapshotId: input.snapshotId, requestId: input.requestId, queryHash: input.queryHash, evidenceRef, executionArn: ctx.executionArn })]);
+      this.event(row, 'prompt_context.recorded', ctx.actorId, { snapshotId: input.snapshotId, requestId: input.requestId, contextHash: input.contextHash, evidenceRef, executionArn: ctx.executionArn })]);
     } catch (error) { if ((error as WorkflowDataError).code === 'CONFLICT' && await same()) return; throw error; }
   }
   async openApprovalWait(ctx: WorkflowContext, input: { changeId: string; snapshotHash: string; gate: Gate; attemptId: string; taskToken: string; expiresAt: string; targetId?: string; expectedPriorDeploymentId?: string; historyFlagIds?: string[] }): Promise<void> {
@@ -157,9 +178,11 @@ export class WorkflowRepository {
     requireData(!row.callbackPending, 'BUSY', 'Previous callback is still being delivered');
     requireData(row.state === (input.gate === 'content' ? 'checked' : 'tested'), 'INVALID_STATE', 'Gate prerequisites have not passed');
     requireData(row.openAmbiguities === 0, 'OPEN_AMBIGUITY', 'Open ambiguity blocks approval');
+    let historyFlags: HistoryFlag[] = row.historyFlags ?? [];
     if (input.gate === 'content') {
       const snapshot = await this.getSnapshot(ctx, row.changeId, row.snapshotId);
-      requireData(snapshot.retrievalEvidenceRefs?.length > 0, 'MISSING_EVIDENCE', 'Freeze exact retrieval evidence references into a new snapshot before review');
+      requireData(snapshot.retrievalEvidenceRefs?.length > 0, 'MISSING_EVIDENCE', 'Freeze the exact prompt-context source references into a new snapshot before review');
+      historyFlags = await this.checkRuleHistory(ctx, row.changeId, row.snapshotHash);
     }
     let build: Item | undefined;
     if (input.gate === 'deploy') {
@@ -174,7 +197,7 @@ export class WorkflowRepository {
       status: 'pending', createdAt: this.stamp(), buildId: build?.buildId, artifactDigest: build?.artifactDigest,
       targetId: input.targetId, expectedPriorDeploymentId: input.expectedPriorDeploymentId ?? null,
       historyFlagIds: [...new Set(input.historyFlagIds ?? [])] });
-    await this.commit([this.insert(this.tables.tokens, token), this.metaUpdate(row, { state: input.gate === 'content' ? 'content_review' : 'deploy_review', activeWaitSk: sk }),
+    await this.commit([this.insert(this.tables.tokens, token), this.metaUpdate(row, { state: input.gate === 'content' ? 'content_review' : 'deploy_review', activeWaitSk: sk, historyFlags }),
       this.event(row, `${input.gate}.review_opened`, ctx.actorId, { attemptId: input.attemptId, expiresAt: token.expiresAt, buildId: build?.buildId })]);
   }
   async recordDecision(ctx: HumanContext, input: DecisionInput): Promise<Item> {
@@ -217,14 +240,26 @@ export class WorkflowRepository {
       gate: input.gate, snapshotHash: row.snapshotHash, decision: input.decision, actorId: ctx.subject,
       actorRole: ctx.groups.find(g => allowed.includes(g as never)), authorId: row.authorId, notes: input.notes ?? '',
       createdAt: this.stamp(), idempotencyKey: input.idempotencyKey, buildId: token.buildId, artifactDigest: token.artifactDigest, targetId: token.targetId,
-      expectedPriorDeploymentId: token.expectedPriorDeploymentId, acknowledgedFlagIds: acknowledged,
+      expectedPriorDeploymentId: token.expectedPriorDeploymentId, acknowledgedFlagIds: acknowledged, historyFlags: row.historyFlags ?? [],
       validationReport: row.validationReport, testReport: row.testReport, diffReport: row.diffReport, executionArn: row.executionArn });
     const payload = clean({ changeId: row.changeId, snapshotHash: row.snapshotHash, gate: input.gate, decisionId: input.decisionId,
       decision: input.decision, buildId: token.buildId, artifactDigest: token.artifactDigest });
     const patch: Item = { state: input.decision === 'approve' ? `${input.gate}_approved` : 'rejected', callbackPending: true };
     if (input.decision === 'approve') patch[`${input.gate}DecisionKey`] = decisionKey;
+    const rejectedRules: Write[] = [];
+    if (input.gate === 'content' && input.decision === 'reject') {
+      const snapshot = await this.getSnapshot(ctx, row.changeId, row.snapshotId);
+      const unique = new Set<string>();
+      for (const rule of (snapshot.ruleFingerprints ?? []) as RuleFingerprint[]) {
+        if (unique.has(rule.fingerprint)) continue; unique.add(rule.fingerprint);
+        rejectedRules.push(this.insert(this.tables.approvals, { changeId: `HISTORY#${ctx.tenantId}#${row.pathwayId}#${rule.fingerprint}`,
+          sk: `${decision.createdAt}#${input.decisionId}`, tenantId: ctx.tenantId, pathwayId: row.pathwayId,
+          fingerprint: rule.fingerprint, sourceChangeId: row.changeId, snapshotHash: row.snapshotHash, snapshotId: row.snapshotId,
+          decisionId: input.decisionId, decisionKey, decision: 'reject', gate: 'content', notes: decision.notes, createdAt: decision.createdAt }));
+      }
+    }
     try {
-      await this.commit([this.insert(this.tables.approvals, decision), this.insert(this.tables.approvals, { changeId: row.changeId,
+      await this.commit([...rejectedRules, this.insert(this.tables.approvals, decision), this.insert(this.tables.approvals, { changeId: row.changeId,
         sk: receiptKey, tenantId: row.tenantId, requestHash, decisionKey, createdAt: this.stamp() }),
         this.metaUpdate(row, patch), this.event(row, `${input.gate}.${input.decision}`, ctx.subject, { decisionId: input.decisionId, decisionKey }),
         { Update: { TableName: this.tables.tokens, Key: { changeId: row.changeId, sk: token.sk },

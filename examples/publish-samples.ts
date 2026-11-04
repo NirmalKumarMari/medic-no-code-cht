@@ -2,14 +2,15 @@ import { readFile, writeFile } from "node:fs/promises";
 import { S3Client } from "@aws-sdk/client-s3";
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 import { ArtifactStore } from "../src/artifacts.js";
-import { Ingestor, GuardrailScreen } from "../src/ingestion.js";
+import { SourcePublisher } from "../src/sources.js";
+import { GuardrailScreen } from "../src/screening.js";
 import { sourceSchema } from "../src/contracts.js";
 function env(key: string) {
   const value = process.env[key];
   if (!value) throw Error(`Missing ${key}`);
   return value;
 }
-// Run in the trusted ingestion worker role. Review files and set SOURCE_REVIEWER before running.
+// Run in the trusted source writer role. Review files and set SOURCE_REVIEWER before running.
 const reviewer = env("SOURCE_REVIEWER");
 const reviewedAt = env("SOURCE_REVIEWED_AT");
 const s3 = new S3Client({});
@@ -18,14 +19,7 @@ const artifacts = new ArtifactStore(
   env("ARTIFACT_BUCKET"),
   env("KMS_KEY_ARN"),
 );
-const sources = new ArtifactStore(
-  s3,
-  env("KB_SOURCE_BUCKET"),
-  env("KMS_KEY_ARN"),
-  ["guideline/", "cht-docs/", "reference-config/"],
-);
-const ingestor = new Ingestor(
-  sources,
+const publisher = new SourcePublisher(
   artifacts,
   new GuardrailScreen(
     new BedrockRuntimeClient({}),
@@ -48,7 +42,7 @@ for (const entry of catalog) {
     reviewedAt,
   });
   publications.push(
-    await ingestor.publish(
+    await publisher.publish(
       source,
       await readFile("examples/sources/" + file),
       format,
@@ -57,5 +51,5 @@ for (const entry of catalog) {
 }
 await writeFile("publications.json", JSON.stringify(publications, null, 2));
 console.log(
-  "Screened sources uploaded. Start the three ingestion jobs with IngestionJobs; wait for COMPLETE and zero failed documents before enabling retrieval.",
+  "Versioned source receipts saved to publications.json. Backend selects the full guideline or curated primer explicitly; no search/sync job exists. These samples are not the finalized clinical pathway or primer.",
 );

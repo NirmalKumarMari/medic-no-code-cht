@@ -11,19 +11,13 @@
     "destroy": "cdk destroy",
     "preflight": "tsx scripts/preflight.ts",
     "teardown": "tsx scripts/teardown.ts",
-    "publish-samples": "tsx examples/publish-samples.ts",
-    "sync-sources": "tsx scripts/sync-sources.ts"
+    "publish-samples": "tsx examples/publish-samples.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-agent": "^3.0.0",
-    "@aws-sdk/client-bedrock-agent-runtime": "^3.0.0",
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-cloudformation": "^3.1161.0",
-    "@aws-sdk/client-kms": "^3.1161.0",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/client-sts": "^3.1161.0",
-    "aws-cdk-lib": "^2.0.0",
-    "constructs": "^10.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
@@ -31,7 +25,9 @@
     "aws-cdk": "^2.0.0",
     "prettier": "^3.9.10",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
   },
   "engines": {
     "node": ">=22"

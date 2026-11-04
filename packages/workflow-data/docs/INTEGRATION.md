@@ -1,64 +1,66 @@
-# Integration handoff
+# Workflow database integration — November 4 revision
 
-This is Yash's workflow persistence module. The teammate's storage contracts were read at `origin/database` commit `b189fc2` on November 3, 2026. Her implementation files remain unchanged; this package is added alongside them. `ArtifactRef` matches her `src/contracts.ts` structurally; source raw hashes and exported-document hashes remain separate. The app owners still need to connect actual authentication, state machine and CHT/build workers. Local transport fixtures are not a live end-to-end approval demonstration.
+Canonical source: revised FINAL Solution Design. Root storage now publishes screened full sources and prepares exact guideline/primer text for prompts. There is no KB, semantic retrieval service, embeddings, vector store or AgentCore Memory. Changes/Approvals/Audit/Tokens remain the four tables; their physical key schemas are unchanged. Actual UI/authentication/Step Functions/model/build/CHT integration remains with those component owners.
 
-## Ownership and startup sequence
+## Source/context and snapshot flow
 
-1. Teammate deploys her artifact bucket/KMS/storage service separately and supplies the bucket, KMS key ARN and permitted reader roles. This module does not duplicate her buckets, KB, vectors or Memory.
-2. API/workflow owner reserves a real execution ARN, creates the draft through a verified program officer, then starts processing. A starting draft may have `retrievalEvidenceRefs: []` and catalog-pinned `evidenceVersions`; such a draft cannot enter content approval.
-3. Inject the adapter below into her `RetrievalService` for an existing current draft. The trusted backend resolves tenant/execution context; agent JSON never supplies it. Request IDs are unique per distinct query/result attempt. Persisting the receipt is awaited and failures propagate.
-4. Collect immutable evidence/source references from the retrieval receipt; upload the completed bundle to a new snapshot ID, then call `registerRevision` with the previous expected hash and its coordinated new execution. Stop/supersede the prior execution. That new hash binds the evidence before content approval; a retrieval receipt does not silently mutate an approved snapshot.
-5. All further operations follow the README workflow contract. UI/backend owners supply verified identities; orchestrator owns ordering; worker identities are isolated from agents. Approved artifact bytes are staged before the no-network builder starts.
+1. A trusted operator publishes the actual guideline and reviewed CHT primer through root `SourcePublisher`. Source text and raw/provenance versions stay under `docs/` in the one private versioned artifact bucket. Publication is not a search/ingestion job. The source and artifact SHA-256 values can differ after deterministic text export.
+2. Reserve the actual workflow execution ARN and create the draft via a verified program officer. Its `evidenceVersions` pins the chosen source versions. An initial draft can have an empty legacy `retrievalEvidenceRefs` array but cannot enter content review until full prompt context is captured.
+3. Root `PromptContextBuilder.prepare(trustedContext, mode, publishedSource)` reads/verifies/screen-checks the entire versioned guideline (`drafting`) or curated primer (`change_planner`). No model chooses source IDs or calls an evidence tool. The model caller includes this exact full text in its prompt and applies supported caching/token limits without silent truncation.
+4. The builder writes the full receipt under `reports/<changeId>/context/<snapshotId>/<requestId>.json` and awaits the adapter below. The adapter requires the current draft/snapshot and real trusted execution identity. Context hashes/ref paths/request IDs are validated. No full source/prompt text is stored in DynamoDB.
+5. Freeze the returned source pins and context receipt refs into a new snapshot version using `registerRevision`; coordinate the new execution and stop/supersede the old one. Validation, history check and both human gates apply to that exact version. Capture does not silently alter an approved snapshot.
 
 ```ts
-// worker is created by authenticated internal code for this actual execution.
-const retrievalAudit = {
-  async record({ context, queryHash, evidenceRef }) {
-    await repo.recordRetrievalAudit(worker, {
+const contextAudit = {
+  async record({ context, contextHash, evidenceRef }) {
+    if (context.tenantId !== worker.tenantId) throw new Error('Tenant mismatch');
+    await repo.recordPromptContext(worker, {
       changeId: context.changeId, snapshotId: context.snapshotId,
-      requestId: context.requestId, queryHash, evidenceRef,
+      requestId: context.requestId, contextHash, evidenceRef,
     });
   },
 };
+// Freeze builderResult.source.sourceId/version/sourceHash/sourceS3Ref in evidenceVersions.
+// Keep the legacy field name, now containing exact prompt-input receipt references:
+// retrievalEvidenceRefs: [builderResult.evidenceRef]
 ```
 
-The method requires the current `draft`/`draft_failed`, matching execution, current snapshot ID and exact receipt path. It transactionally appends an audit event and idempotent receipt index. It never stores raw queries in DynamoDB; those belong in the screened S3 receipt. The final bundle includes:
+`recordPromptContext` writes `CONTEXT#<snapshotId>#<requestId>` plus an append-only `prompt_context.recorded` event, transactionally. Identical retries are idempotent; altered reuse fails. Schema/hash field `retrievalEvidenceRefs` is retained to avoid an unnecessary hash-format migration; it no longer represents KB query results. Do not fabricate old query records or rewrite already-approved snapshot bytes. Full prompt instructions/model-call traces are separately screened S3 report artifacts. Citation correctness still requires the deterministic/model-output checks owned by the logic/agent components.
 
-```ts
-evidenceVersions: [{
-  sourceId: evidence.sourceId,
-  version: evidence.version,
-  sha256: evidence.sourceHash,    // original source section, before export
-  sourceS3Ref: evidence.sourceS3Ref, // exact exported section bytes + VersionId
-}],
-retrievalEvidenceRefs: [evidenceRef], // query/result receipts from the awaited audit callback
-```
+## Deterministic rejection history
 
-Freeze these references as well as the logic/spec, baseline, golden cases and compiler/toolchain. Re-fetch and verify them using her `ArtifactStore` before approving/building. Preserve them if the live KB is re-indexed. An empty retrieval result must remain an unresolved validation issue; do not manufacture citations to fill this bundle.
+`fingerprintRules(spec)` uses explicit rule `id`, `when`, `then`, optional `followUp`; fingerprints exclude IDs/citation labels but include follow-up timing. Object-key order and all/any term order are normalized with stable lexical comparison. Other array ordering is preserved. No model or general theorem prover infers equivalence. At most 80 explicit rules fit the current atomic rejection transaction. A clinical snapshot without explicit rules cannot successfully validate; an intake/wording draft can exist before rules are available.
 
-## Proposed IAM boundaries
+Content rejection appends one index row per unique fingerprint **in the same transaction** as the decision, idempotency receipt, audit and callback state. Approvals PK is `HISTORY#<tenant>#<pathway>#<fingerprint>`, SK `<timestamp>#<decisionId>`; actual originating change ID is `sourceChangeId`. This is a materialized key index in the existing table, requiring no fifth table, GSI or table replacement. Approvals still has its normal per-change CONTENT/DEPLOY/IDEMP records. Index rows are append-only, never edited to reflect a later approval. IT deployment rejections are not clinical rejection history.
 
-The four-table stack does not create/attach IAM roles or credentials. These permissions are intended for the app's **separate existing service roles**, once their actual names/isolated runtime environments are known. Do not attach them to agent roles or share an EC2 instance profile with agents. Table ARNs come from the stack outputs. No runtime component needs `Scan`, `DeleteItem`, table deletion or backup administration.
+`checkRuleHistory` strongly consistently reads the most recent rejection per rule, scoped to tenant/pathway. `recordValidation` folds it into Logic Checks; opening content review refreshes it. At most one latest-history flag per current rule is returned; the prior decision/snapshot references allow the UI to show full context. Short note excerpts bound projection size. If a whole snapshot was rejected, the index says a rule appeared in that rejected snapshot; it does not claim each rule was individually adjudged unsafe.
 
-| Component | Required table permissions | Additional permissions |
-|---|---|---|
-| UI read backend | `GetItem` Changes; `Query` Changes, Approvals, Audit, Changes/ReviewInboxIndex | Verified Cognito identity at API boundary; no Tokens |
-| Trusted draft/workflow worker | `GetItem` Changes, Approvals, Tokens; transactional `PutItem` Changes, Tokens, Audit; transactional `UpdateItem` Changes, Tokens; transactional `ConditionCheckItem` Changes | `s3:GetObjectVersion` configured `snapshots/*`; KMS decrypt on teammate key with S3 encryption context; worker verifies external build/test/proof files via artifact helpers |
-| Human decision handler | `GetItem` Changes, Approvals, Tokens; transactional `PutItem` Approvals, Audit; transactional `UpdateItem` Changes, Tokens | Verified identity/group/tenant checks and context construction. Never expose raw token reads as an HTTP method |
-| Callback worker | `GetItem` Changes, Tokens; `Query` Tokens/CallbackDeliveryIndex; `UpdateItem` Tokens for claims/retries and final transaction; transactional `UpdateItem` Changes; transactional `PutItem` Audit | `states:SendTaskSuccess` (token-scoped API, resource `*`), `states:GetExecutionHistory` restricted to the actual project's execution ARN pattern |
-| Build sandbox / agent containers | None | Offline builder receives verified read-only staged bytes. Agent Gateway policies cannot substitute for role isolation |
+`historyFlags` are high-severity **advisory** flags on content review and are preserved in the decision record. They never turn a passed validation into failure or automatically block the clinician. Ambiguity/failed tests still block progression normally. Existing explicit IT flag acknowledgements remain available to callers that supply them, but there is no separate History Check agent/state or semantic similarity layer.
 
-DynamoDB authorizes transactions using the underlying `PutItem`, `UpdateItem`, `GetItem`, and `ConditionCheckItem` actions, with `dynamodb:EnclosingOperation = TransactWriteItems` where transactional writes are required. There is no need to invent a `dynamodb:TransactWriteItems` IAM grant. See [AWS transaction IAM documentation](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis-iam.html). Keep Approvals/Audit put-only for writers; this repository additionally uses conditional inserts. Broader administrator privileges can bypass application append-only rules, so they must not be available to running agents/services.
+For any historical application snapshots created before this revision, do not claim complete fingerprint coverage without a reviewed backfill from their exact immutable bundles and original content decisions. Never modify old decisions or derive history from Memory. The verified November 3 AWS dataset contained only synthetic storage probes, not application decisions.
 
-The callback worker has no S3/model/CHT/Secrets Manager permissions. The distinct CHT deployer must still satisfy deploy approval and own the target lease; this package never reads CHT credentials. The infrastructure/bootstrap operator may use the existing workshop role for deployment; it is not an application runtime identity.
+## Permissions and trust boundary
 
-## Operational recovery
+`HumanContext` must come from verified Cognito JWT issuer/audience/signature/expiry, server-derived tenant membership and allowlisted roles. Never accept subject/groups/tenant identity from request JSON. `WorkflowContext` is an authenticated actual worker execution identity. TypeScript interfaces are not authentication. Expose allowlisted HTTP operations/response fields rather than the whole repository. Never send raw SDK errors, tokens or table-query internals to UI/model callers.
 
-- Retry an identical human decision with the same idempotency key. Altered content under that key is rejected.
-- Retry `CONFLICT` only after reading current state/hash. Never turn a stale snapshot error into approval for a new hash.
-- While `callbackPending` is true, retry dependent workflow transitions. Success may have reached Step Functions before database finalization; outbox history reconciliation recovers that gap.
-- `needs_attention` is a deliberate stop. Inspect the original execution and immutable decision. If execution history exceeds the dispatcher's bounded lookback, investigate the full history before repair. Do not assume token expiry means callback delivery succeeded.
-- An unresolved deployment lease is not stolen after a timeout. First verify the actual CHT target. Record the exact deployed result with `completeDeployment`, or, only after confirmed rollback/unchanged target, use `reconcileFailedDeployment` with versioned verification proof. A different target revision requires a newly reviewed deployment intent.
-- To recover table loss, an operator restores PITR to new tables, verifies all four tables' consistency and updates service configuration together before resuming workers. PITR is per-table, so test this coordinated recovery before production. Never resume callbacks from an unexamined partial restore.
+The four-table stack creates no IAM roles/grants. Wire these into actual isolated service roles; agents and offline build containers get no table permissions:
 
-Optional exact rule-fingerprint history and AgentCore Memory remain deferred. They are advisory and cannot override these transactions or clinical validation.
+| Component | Table access |
+|---|---|
+| UI read backend | GetItem Changes; Query Changes/Approvals/Audit and Changes/ReviewInboxIndex; no Tokens |
+| Trusted workflow/logic worker | GetItem Changes/Approvals/Tokens; Query Approvals for history; transactional PutItem Changes/Tokens/Audit; transactional UpdateItem Changes/Tokens; ConditionCheckItem Changes |
+| Verified human decision handler | GetItem Changes/Approvals/Tokens; transactional PutItem Approvals/Audit (including rejection index rows); transactional UpdateItem Changes/Tokens |
+| Callback worker | GetItem Changes/Tokens; Query Tokens/CallbackDeliveryIndex; UpdateItem Tokens for leases/retries; transactional UpdateItem Changes and PutItem Audit |
+
+Transactions use underlying PutItem/UpdateItem/GetItem/ConditionCheckItem permissions, with `dynamodb:EnclosingOperation` restricting transactional writes as appropriate. No runtime role requires Scan/DeleteItem or table administration. Callback worker additionally uses SendTaskSuccess and project-scoped GetExecutionHistory; it needs no S3/model/CHT/Secrets Manager permissions. Root prompt/source workers need explicit scoped S3/KMS/Guardrail permissions plus the internal authenticated audit callback, never approval authority. Shared EC2 instance credentials must not be available to agents.
+
+## Recovery and acceptance
+
+- Retry identical decisions with the same idempotency key; refresh current state/hash on conflicts.
+- Retry dependent transitions while callback finalization is pending. Exact execution-history reconciliation recovers a lost success response. Token disappearance alone never proves delivery.
+- `needs_attention` requires reconciliation with the original execution/decision. There is no automatic expiry bypass; history lookback is bounded.
+- Never steal an unresolved deployment lease after a timeout. Verify actual CHT state, then record exact completion or confirmed rollback/unchanged-target evidence through the recovery APIs.
+- Coordinated PITR restore must inspect all four tables and paused callback/deployment state before resuming.
+- Local tests validate storage consistency and synthetic history/callback behavior. Actual Cognito/Step Functions/model caching/clinical citations/CHT correctness need integrated acceptance checks.
+
+No clinical/sample AWS or CHT records are seeded by this change. The two human approvals, snapshot hashes, immutable artifact refs and real build/test evidence remain mandatory. A compiler/toolchain identity change changes the documented hash inputs and requires new approval; only truly unchanged-input infrastructure retries reuse an approval. The source document's tooling-retry wording does not authorize silently changing hash inputs.

@@ -1,6 +1,6 @@
-# Database implementation status — November 3, 2026
+# Database implementation status — revised November 4, 2026
 
-Yash's workflow persistence implementation is in `packages/workflow-data/` on the `database` branch, alongside the teammate's existing artifact/storage implementation at the repository root. It is added on top of her `b189fc2` commit. The root README links both components; her implementation files are preserved. This change targets `database` only.
+Yash's workflow persistence implementation is in `packages/workflow-data/` on the `database` branch, alongside the teammate's existing artifact/storage implementation at the repository root. It is added on top of her `b189fc2` commit. The November 4 revision updates both components to the user's new canonical design. This change targets `database` only.
 
 ## Deployed and verified
 
@@ -16,9 +16,7 @@ Deployment and smoke tests used the existing `WSParticipantRole/Participant` Clo
 
 ## Local implementation verified
 
-`npm run build`, `npm test` (**43 passed, zero failed**) and `npm run synth` passed. Tests use real DynamoDB Local for repository transactions, with synthetic S3/Step Functions fixtures. Coverage includes exact artifact/hash matching; durable retrieval audit; role and tenant checks; stale snapshots; concurrent/idempotent decisions; rejection; callback restart/transient/lost-response recovery; token expiry; preview isolation; exact release binding; target locking/reconciliation; rollback history and multi-page queries.
-
-On the combined `database` checkout, the teammate's root `npm run check`, `npm test` (**16 passed**) and `npm run synth` also passed. The two independently configured components pass **59 tests** in total; this is not a claim that the live application integration has been completed.
+Original November 3 checks passed before publication. The November 4 revision adds complete direct prompt-context source verification/auditing and atomic rejected-rule history, removing the KB/vector/ingestion APIs and infrastructure. Current test results are recorded in the root revision note. Local DynamoDB tests remain synthetic and do not prove live model/auth/workflow/CHT integration.
 
 Runtime dependency audit reports zero vulnerabilities. Full development audit still reports CDK's bundled `minimatch` moderate advisory; see the README. This is documented, not hidden by a failed override. The ineffective override was removed.
 
@@ -26,9 +24,9 @@ Runtime dependency audit reports zero vulnerabilities. Full development audit st
 
 The account's `us-west-2` Step Functions state-machine list was empty when checked after deployment (observed `2026-11-04 00:06:51 UTC`). Consequently, **real Step Functions callback integration has not been exercised**. The Cognito verifier, state machine, EC2 runtime/service roles, actual build/test harness and CHT deploy adapter are not present in this initial repository checkout and are not implemented by this database package. No clinical approvals or deployments were fabricated to suggest otherwise.
 
-Use [INTEGRATION.md](INTEGRATION.md) for the teammate's exact artifact/retrieval contract, trusted context construction, callback wiring, component IAM permission boundaries and recovery. Service permissions are proposed there, ready to apply to the application's actual isolated roles once those identities exist. They are not deployed role grants. The callback process is supplied but is not running in AWS without its real tenants/workflow/role configuration.
+Use [INTEGRATION.md](INTEGRATION.md) for the teammate's exact artifact/prompt-context contract, trusted context construction, callback wiring, component IAM permission boundaries and recovery. Service permissions are proposed there, ready to apply to the application's actual isolated roles once those identities exist. They are not deployed role grants. The callback process is supplied but is not running in AWS without its real tenants/workflow/role configuration.
 
-AgentCore Memory and optional exact-rule-fingerprint history remain deferred. The teammate's S3/KB/vector infrastructure was not deployed or changed as part of this DynamoDB task. Her `database` branch artifact contract was checked at `b189fc2` and the common ArtifactRef shape matches.
+AgentCore Memory and semantic history are removed. Exact rejected-rule history is implemented in the existing Approvals table and refreshed during Logic Checks/content review. No table/index provisioning change is needed for these materialized key records. Source storage is simplified to one S3 artifact bucket plus screened full-context loading. See the root revision note for live resource inventory and remaining deployment work.
 
 ## Files and operations
 
@@ -36,7 +34,7 @@ AgentCore Memory and optional exact-rule-fingerprint history remain deferred. Th
 - `infra/app.ts`: four-table CDK source; generated template in ignored `.artifacts/`.
 - `scripts/dispatch-callbacks.ts`: internal EC2/scheduler callback worker; no HTTP listener.
 - `scripts/aws-smoke.ts`: explicit opt-in real AWS storage probe.
-- `test/`: synthetic fixtures and 43 passing checks.
+- `test/`: synthetic fixtures and current consistency/history checks.
 - `.env.example`: table names/tenant/artifact-bucket configuration, no credentials.
 
 The tables are retained and deletion-protected. Their storage/PITR billing persists until deliberately cleaned up by the account owner. The README explains retention/cleanup; no table or cloud data was deleted.

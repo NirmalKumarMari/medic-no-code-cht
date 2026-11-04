@@ -15,6 +15,7 @@ export const artifactRefSchema = z
 export type ArtifactRef = z.infer<typeof artifactRefSchema>;
 export const sourceTypeSchema = z.enum([
   "guideline",
+  "cht-primer",
   "cht-docs",
   "reference-config",
 ]);
@@ -22,7 +23,7 @@ export type SourceType = z.infer<typeof sourceTypeSchema>;
 export const sourceSchema = z
   .object({
     sourceType: sourceTypeSchema,
-    sourceId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+    sourceId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/),
     version: z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),
     section: z.string().min(1).max(100),
     page: z.number().int().positive().optional(),
@@ -38,28 +39,23 @@ export const sourceSchema = z
   })
   .strict();
 export type Source = z.infer<typeof sourceSchema>;
-export interface SourceGrant {
-  sourceHash: string;
-  sourceType: SourceType;
-  sourceId: string;
-  version: string;
-  workflow?: string;
+/** Trusted server-owned references, never source selection supplied by an agent. */
+export interface PublishedSource {
+  source: Source;
+  document: ArtifactRef;
+  provenance: ArtifactRef;
 }
-// Trusted backend constructs this from authenticated identity + the pinned snapshot, never request JSON.
-export interface AuthorizedContext {
+export interface PromptContextRequest {
+  tenantId: string;
   changeId: string;
   snapshotId: string;
   requestId: string;
-  grants: readonly SourceGrant[];
 }
-export interface Evidence {
-  text: string;
-  sourceId: string;
-  version: string;
-  section: string;
-  page?: number;
-  tableId?: string;
-  sourceHash: string;
-  sourceS3Ref: ArtifactRef;
-  score?: number;
+export type PromptMode = "drafting" | "change_planner";
+export interface PromptContextAudit {
+  record(event: {
+    context: PromptContextRequest;
+    contextHash: string;
+    evidenceRef: ArtifactRef;
+  }): Promise<void>;
 }

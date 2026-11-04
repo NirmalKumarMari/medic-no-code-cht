@@ -8,26 +8,19 @@ try {
   const identity = await new STSClient({ region }).send(
     new GetCallerIdentityCommand({}),
   );
-  console.log({
-    account: identity.Account,
-    principal: identity.Arn,
-    region: process.env.AWS_REGION ?? "us-west-2",
-  });
+  console.log({ account: identity.Account, principal: identity.Arn, region });
   const cfn = new CloudFormationClient({ region });
   for (const TypeName of [
-    "AWS::S3Vectors::VectorBucket",
-    "AWS::S3Vectors::Index",
-    "AWS::Bedrock::KnowledgeBase",
+    "AWS::S3::Bucket",
+    "AWS::KMS::Key",
+    "AWS::Bedrock::Guardrail",
+    "AWS::Bedrock::GuardrailVersion",
   ])
     await cfn.send(new DescribeTypeCommand({ Type: "RESOURCE", TypeName }));
   console.log(
-    "Identity and regional CloudFormation resource types verified. Deploy still needs quota/model/KMS/IAM permissions and a live ingestion/retrieval smoke test.",
+    "Source storage and input-screening resource types verified. Live S3/KMS/Guardrail permissions still require a smoke test. No indexing or embeddings are required.",
   );
 } catch (error) {
-  console.error(
-    "AWS preflight blocked:",
-    (error as Error).name,
-    (error as Error).message,
-  );
+  console.error("AWS preflight blocked:", (error as Error).name);
   process.exitCode = 1;
 }

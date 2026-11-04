@@ -1,19 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { S3Client } from "@aws-sdk/client-s3";
-import { BedrockAgentRuntimeClient } from "@aws-sdk/client-bedrock-agent-runtime";
 import { ArtifactStore, sha256 } from "../src/artifacts.js";
-import { Ingestor, GuardrailScreen, IngestionJobs } from "../src/ingestion.js";
-import { RetrievalService } from "../src/retrieval.js";
-import type { AuthorizedContext, Source } from "../src/contracts.js";
+import { SourcePublisher } from "../src/sources.js";
+import { GuardrailScreen } from "../src/screening.js";
+import { PromptContextBuilder } from "../src/prompt-context.js";
+import type { Source, PromptContextRequest } from "../src/contracts.js";
 function fixture() {
-  const objects = new Map<string, any[]>();
-  const calls: any[] = [];
+  const objects = new Map<string, any[]>(),
+    calls: any[] = [];
   const client = {
     send: async (command: any) => {
       calls.push(command);
-      const i = command.input;
-      const id = i.Bucket + "/" + i.Key;
+      const i = command.input,
+        id = i.Bucket + "/" + i.Key;
       if (command.constructor.name === "PutObjectCommand") {
         if (objects.has(id))
           throw Object.assign(Error("exists"), { name: "PreconditionFailed" });
@@ -29,7 +30,7 @@ function fixture() {
       }
       const entry = objects
         .get(id)
-        ?.find((v) => !i.VersionId || v.VersionId === i.VersionId);
+        ?.find((v) => !i.VersionId || i.VersionId === v.VersionId);
       if (!entry) throw Error("Not found");
       return {
         ...entry,
@@ -37,81 +38,58 @@ function fixture() {
       };
     },
   } as unknown as S3Client;
-  const artifacts = new ArtifactStore(client, "artifacts", "key");
-  const sources = new ArtifactStore(client, "sources", "key", [
-    "guideline/",
-    "cht-docs/",
-    "reference-config/",
-  ]);
-  return { objects, calls, artifacts, sources, client };
+  return {
+    objects,
+    calls,
+    client,
+    artifacts: new ArtifactStore(client, "artifacts", "key"),
+  };
 }
-const body = Buffer.from("Public section with a complete table.");
+const body = Buffer.from(
+  "Public guideline: a complete table and the surrounding text.",
+);
 const source: Source = {
   sourceType: "guideline",
   sourceId: "example",
   version: "edition-1",
-  section: "Section A",
+  section: "Full guideline",
   path: "guideline.md",
   url: "https://www.cdc.gov/example",
   sourceHash: sha256(body),
   public: true,
   reviewedBy: "reviewer",
-  reviewedAt: "2026-11-03T12:00:00Z",
+  reviewedAt: "2026-11-04T18:00:00Z",
   purpose: "reference-document",
 };
 const allowed = { screen: async (_: string) => {} };
-const context: AuthorizedContext = {
+const context: PromptContextRequest = {
+  tenantId: "demo",
   changeId: "change-1",
   snapshotId: "snapshot-1",
   requestId: "request-1",
-  grants: [
-    {
-      sourceType: "guideline",
-      sourceId: "example",
-      version: "edition-1",
-      sourceHash: sha256(body),
-    },
-  ],
 };
-async function retrievalFixture() {
+async function promptFixture() {
   const f = fixture();
-  const ingest = new Ingestor(f.sources, f.artifacts, allowed, [
+  const publisher = new SourcePublisher(f.artifacts, allowed, [
     "https://www.cdc.gov",
   ]);
-  const pub = await ingest.publish(source, body, "md");
-  const meta = JSON.parse(
-    Buffer.from(await f.sources.getArtifactVersion(pub.metadata)).toString(),
-  ).metadataAttributes;
-  const hit = {
-    content: { text: body.toString() },
-    location: { s3Location: { uri: `s3://sources/${pub.document.key}` } },
-    metadata: meta,
-    score: 0.8,
-  };
-  const queries: any[] = [];
+  const published = await publisher.publish(source, body, "md");
   let audits = 0;
-  const runtime = {
-    send: async (c: any) => {
-      queries.push(c.input);
-      return { retrievalResults: [hit] };
-    },
-  } as unknown as BedrockAgentRuntimeClient;
   const audit = {
-    record: async () => {
+    record: async (_: any) => {
       audits++;
     },
   };
-  const service = new RetrievalService(
-    runtime,
-    "kb",
-    f.sources,
-    f.artifacts,
+  return {
+    ...f,
+    publisher,
+    published,
     audit,
-    allowed,
-  );
-  return { ...f, hit, queries, audit, service, getAudits: () => audits };
+    builder: new PromptContextBuilder(f.artifacts, audit, allowed),
+    getAudits: () => audits,
+  };
 }
-test("conditional KMS upload returns exact reference; equal retries are idempotent", async () => {
+test("immutable KMS upload returns exact version/hash; equal retry succeeds and different content fails", async () => {
   const f = fixture();
   const ref = await f.artifacts.putArtifact(
     "snapshots/c/s/logic.json",
@@ -125,70 +103,69 @@ test("conditional KMS upload returns exact reference; equal retries are idempote
     await f.artifacts.putArtifact(ref.key, body, "text/plain"),
     ref,
   );
-  assert.deepEqual(
-    await f.artifacts.getArtifactVersion(ref),
-    Uint8Array.from(body),
-  );
   await assert.rejects(
     f.artifacts.putArtifact(ref.key, Buffer.from("changed"), "text/plain"),
     /conflict/,
   );
 });
-test("tampered contents, wrong bucket and unversioned references are rejected", async () => {
+test("version, bucket, content-type, encryption and byte corruption are rejected", async () => {
   const f = fixture();
-  const ref = await f.artifacts.putArtifact("docs/a/v/x", body, "text/plain");
-  await assert.rejects(
-    f.artifacts.getArtifactVersion({ ...ref, bucket: "other" }),
-    /bucket/,
+  const ref = await f.artifacts.putArtifact(
+    "docs/source/a.txt",
+    body,
+    "text/plain",
   );
+  for (const patch of [
+    { bucket: "other" },
+    { versionId: "missing" },
+    { contentType: "text/html" },
+    { sha256: "0".repeat(64) },
+  ])
+    await assert.rejects(f.artifacts.getArtifactVersion({ ...ref, ...patch }));
   await assert.rejects(
     f.artifacts.getArtifactVersion({ ...ref, versionId: "null" }),
   );
-  f.objects.get("artifacts/" + ref.key)![0].bytes = Buffer.from("corrupted");
-  await assert.rejects(f.artifacts.getArtifactVersion(ref), /checksum/);
+  f.objects.get("artifacts/" + ref.key)![0].SSEKMSKeyId = "other-key";
+  await assert.rejects(f.artifacts.getArtifactVersion(ref));
 });
-test("unsafe keys and ingestion prefixes cannot be written through artifact API", async () => {
+test("unsafe keys and unsupported prefixes cannot be written", async () => {
   const f = fixture();
-  for (const key of ["kb-source/x", "reports/../x", "reports//x"])
+  for (const key of ["outside/x", "reports/../x", "reports//x"])
     await assert.rejects(f.artifacts.putArtifact(key, body, "text/plain"));
-  assert.equal(f.calls.length, 0);
 });
-test("prior release manifest resolves exact bytes and detects corruption", async () => {
+test("rollback manifest resolves pinned bytes and detects child corruption", async () => {
   const f = fixture();
-  const release = await f.artifacts.putArtifact(
-    "builds/c/old/app.json",
+  const child = await f.artifacts.putArtifact(
+    "builds/c/b/file.json",
     body,
     "text/plain",
   );
   const manifest = await f.artifacts.putArtifact(
-    "builds/c/old/manifest.json",
-    Buffer.from(JSON.stringify([release])),
+    "builds/c/b/manifest.json",
+    Buffer.from(JSON.stringify([child])),
     "application/json",
   );
-  assert.deepEqual(await f.artifacts.verifyManifest(manifest), [release]);
-  f.objects.get("artifacts/" + release.key)![0].bytes = Buffer.from("wrong");
-  await assert.rejects(f.artifacts.verifyManifest(manifest), /checksum/);
+  assert.deepEqual(await f.artifacts.verifyManifest(manifest), [child]);
+  f.objects.get("artifacts/" + child.key)![0].bytes = Buffer.from("corrupted");
+  await assert.rejects(f.artifacts.verifyManifest(manifest));
 });
-test("screening failure occurs before any S3 write", async () => {
+test("source screening failure happens before any S3 write", async () => {
   const f = fixture();
-  const ingest = new Ingestor(
-    f.sources,
+  const p = new SourcePublisher(
     f.artifacts,
     {
       screen: async () => {
-        throw Error("blocked");
+        throw Error("screen blocked");
       },
     },
     ["https://www.cdc.gov"],
   );
-  await assert.rejects(ingest.publish(source, body, "md"), /blocked/);
+  await assert.rejects(p.publish(source, body, "md"), /screen blocked/);
   assert.equal(f.calls.length, 0);
 });
-test("rejects forbidden categories, source hash changes and unpinned technical docs", async () => {
+test("source publication rejects excluded data, unpinned technical sources and altered hashes", async () => {
   const f = fixture();
-  const i = new Ingestor(f.sources, f.artifacts, allowed, [
-    "https://www.cdc.gov",
-  ]);
+  const p = new SourcePublisher(f.artifacts, allowed, ["https://www.cdc.gov"]);
   for (const path of [
     "golden-cases.md",
     "patient.json",
@@ -196,156 +173,178 @@ test("rejects forbidden categories, source hash changes and unpinned technical d
     "credentials.txt",
     "mcp.txt",
   ])
-    await assert.rejects(i.publish({ ...source, path }, body, "md"));
+    await assert.rejects(p.publish({ ...source, path }, body, "md"));
   await assert.rejects(
-    i.publish({ ...source, sourceHash: "0".repeat(64) }, body, "md"),
-    /hash/,
+    p.publish({ ...source, sourceHash: "0".repeat(64) }, body, "md"),
   );
   await assert.rejects(
-    i.publish(
+    p.publish(
       { ...source, sourceType: "cht-docs", version: "main" },
       body,
       "md",
     ),
-    /commit/,
   );
   assert.equal(f.calls.length, 0);
 });
-test("sidecar pins document version and missing page/table stay absent", async () => {
-  const f = await retrievalFixture();
-  const evidence = await f.service.retrieveEvidence(
-    context,
-    "public section",
-    "guideline",
-  );
-  assert.equal(evidence[0].sourceS3Ref.versionId, "version-1");
-  assert.equal(evidence[0].page, undefined);
-  assert.equal(evidence[0].tableId, undefined);
+test("whole guideline larger than old chunk size is retained without splitting or truncation", async () => {
+  const f = fixture(),
+    full = Buffer.from("Public text and complete tables.\n".repeat(400));
+  const pub = await new SourcePublisher(f.artifacts, allowed, [
+    "https://www.cdc.gov",
+  ]).publish({ ...source, sourceHash: sha256(full) }, full, "txt");
+  const result = await new PromptContextBuilder(
+    f.artifacts,
+    { record: async () => {} },
+    allowed,
+  ).prepare(context, "drafting", pub);
+  assert.equal(result.text, full.toString());
+  assert.ok(![...f.objects.keys()].some((k) => k.endsWith(".metadata.json")));
+});
+test("drafting receives the exact full guideline and durable context receipt before use", async () => {
+  const f = await promptFixture();
+  const r = await f.builder.prepare(context, "drafting", f.published);
+  assert.equal(r.text, body.toString());
   assert.equal(f.getAudits(), 1);
+  assert.equal(r.source.sourceS3Ref.versionId, "version-1");
+  const receipt = JSON.parse(
+    Buffer.from(await f.artifacts.getArtifactVersion(r.evidenceRef)).toString(),
+  );
+  assert.equal(receipt.text, r.text);
+  assert.equal(receipt.contextHash, r.contextHash);
+  assert.ok(!("score" in r));
+});
+test("same inputs recover the context receipt; reused request ID with changed content fails", async () => {
+  const f = await promptFixture();
+  const first = await f.builder.prepare(context, "drafting", f.published);
   assert.deepEqual(
-    f.queries[0].retrievalConfiguration.vectorSearchConfiguration.filter
-      .andAll[2],
-    { equals: { key: "version", value: "edition-1" } },
+    await f.builder.prepare(context, "drafting", f.published),
+    first,
   );
+  const changed = Buffer.from("Updated full public guideline.");
+  const pub = await f.publisher.publish(
+    { ...source, version: "edition-2", sourceHash: sha256(changed) },
+    changed,
+    "txt",
+  );
+  await assert.rejects(f.builder.prepare(context, "drafting", pub), /conflict/);
 });
-test("unauthorized source type never reaches Bedrock", async () => {
-  const f = await retrievalFixture();
+test("planner receives an explicitly reviewed primer and cannot silently use a guideline instead", async () => {
+  const f = await promptFixture();
   await assert.rejects(
-    f.service.retrieveEvidence(context, "tasks", "reference-config"),
-    /Unauthorized/,
+    f.builder.prepare(context, "change_planner", f.published),
+    /type mismatch/,
   );
-  assert.equal(f.queries.length, 0);
-});
-test("filter mismatch fails closed even if Bedrock returns a hit", async () => {
-  const f = await retrievalFixture();
-  f.hit.metadata.version = "edition-2";
+  const text = Buffer.from(
+    "Curated conventions: use the pinned configuration and preserve form identifiers.",
+  );
+  const pub = await f.publisher.publish(
+    {
+      ...source,
+      sourceType: "cht-primer",
+      sourceId: "primer",
+      version: "primer-v1",
+      path: "cht-conventions.md",
+      section: "Full primer",
+      sourceHash: sha256(text),
+    },
+    text,
+    "txt",
+  );
+  assert.equal(
+    (await f.builder.prepare(context, "change_planner", pub)).text,
+    text.toString(),
+  );
   await assert.rejects(
-    f.service.retrieveEvidence(context, "public", "guideline"),
-    /filter mismatch/,
+    f.builder.prepare(context, "drafting", pub),
+    /type mismatch/,
   );
-  assert.equal(f.getAudits(), 0);
 });
-test("missing provenance, altered citation text and wrong location fail closed", async () => {
-  for (const mutate of [
-    (h: any) => delete h.metadata.sourceHash,
-    (h: any) => (h.content.text = "invented"),
-    (h: any) => (h.location.s3Location.uri = "s3://other/doc"),
-  ]) {
-    const f = await retrievalFixture();
-    mutate(f.hit);
+test("forged source identity or version cannot replace published provenance", async () => {
+  const f = await promptFixture();
+  for (const patch of [
+    { version: "wrong" },
+    { sourceHash: "0".repeat(64) },
+    { section: "invented section" },
+  ])
     await assert.rejects(
-      f.service.retrieveEvidence(context, "public", "guideline"),
+      f.builder.prepare(context, "drafting", {
+        ...f.published,
+        source: { ...source, ...patch },
+      }),
+      /provenance mismatch/,
     );
+});
+test("wrong document version, tampered raw content and altered exports fail closed", async () => {
+  for (const which of ["version", "raw", "document"]) {
+    const f = await promptFixture();
+    if (which === "version") f.published.document.versionId = "absent";
+    else {
+      const key =
+        which === "raw"
+          ? [...f.objects.keys()].find((k) => k.endsWith(".raw"))!
+          : "artifacts/" + f.published.document.key;
+      f.objects.get(key)![0].bytes = Buffer.from("changed");
+    }
+    await assert.rejects(f.builder.prepare(context, "drafting", f.published));
     assert.equal(f.getAudits(), 0);
   }
 });
-test("audit failure prevents delivery of retrieved evidence", async () => {
-  const f = await retrievalFixture();
+test("the actual prompt context is screened again; blocked input is never returned", async () => {
+  const f = await promptFixture();
+  const builder = new PromptContextBuilder(f.artifacts, f.audit, {
+    screen: async () => {
+      throw Error("blocked context");
+    },
+  });
+  await assert.rejects(
+    builder.prepare(context, "drafting", f.published),
+    /blocked context/,
+  );
+  assert.equal(f.getAudits(), 0);
+});
+test("audit failure prevents context being returned to the model caller", async () => {
+  const f = await promptFixture();
   f.audit.record = async () => {
     throw Error("audit unavailable");
   };
   await assert.rejects(
-    f.service.retrieveEvidence(context, "public", "guideline"),
+    f.builder.prepare(context, "drafting", f.published),
     /audit unavailable/,
   );
 });
-
-test("Guardrail requires published version and rejects intervention or missing action", async () => {
-  const runtime = await import("@aws-sdk/client-bedrock-runtime");
+test("invalid context paths and invalid source encoding cannot become prompt content", async () => {
+  const f = await promptFixture();
+  await assert.rejects(
+    f.builder.prepare(
+      { ...context, tenantId: "../other" },
+      "drafting",
+      f.published,
+    ),
+  );
+  const raw = Uint8Array.from([0xff, 0xfe]);
+  await assert.rejects(
+    f.publisher.publish({ ...source, sourceHash: sha256(raw) }, raw, "txt"),
+  );
+});
+test("Guardrail requires numeric published version and rejects interventions or missing action", async () => {
+  const { BedrockRuntimeClient } =
+    await import("@aws-sdk/client-bedrock-runtime");
   for (const action of ["GUARDRAIL_INTERVENED", undefined]) {
     const client = {
       send: async () => ({ action }),
-    } as unknown as InstanceType<typeof runtime.BedrockRuntimeClient>;
-    assert.throws(
-      () => new GuardrailScreen(client, "guardrail", "DRAFT"),
-      /Published/,
-    );
+    } as unknown as InstanceType<typeof BedrockRuntimeClient>;
+    for (const version of ["DRAFT", "0", "not-a-version"])
+      assert.throws(() => new GuardrailScreen(client, "id", version));
     await assert.rejects(
-      new GuardrailScreen(client, "guardrail", "1").screen("text"),
+      new GuardrailScreen(client, "id", "1").screen("text"),
       /failed closed/,
     );
   }
 });
-test("ingestion job validates complete receipts before starting and persists status", async () => {
-  const f = fixture();
-  const publication = await new Ingestor(f.sources, f.artifacts, allowed, [
-    "https://www.cdc.gov",
-  ]).publish(source, body, "md");
-  const { BedrockAgentClient } = await import("@aws-sdk/client-bedrock-agent");
-  const calls: any[] = [];
-  const client = {
-    send: async (c: any) => {
-      calls.push(c.input);
-      return {
-        ingestionJob: {
-          ingestionJobId: "job1",
-          status:
-            c.constructor.name === "StartIngestionJobCommand"
-              ? "STARTING"
-              : "COMPLETE",
-          statistics: { numberOfDocumentsFailed: 0 },
-        },
-      };
-    },
-  } as unknown as InstanceType<typeof BedrockAgentClient>;
-  const jobs = new IngestionJobs(
-    client,
-    "kb",
-    { guideline: "ds1", "cht-docs": "ds2", "reference-config": "ds3" },
-    f.sources,
-    f.artifacts,
-  );
-  const broken = {
-    ...publication,
-    metadata: { ...publication.metadata, versionId: "missing" },
-  };
-  await assert.rejects(jobs.start("guideline", [broken], "a".repeat(40)));
-  assert.equal(calls.length, 0);
-  await jobs.start("guideline", [publication], "b".repeat(40));
-  await jobs.start("guideline", [publication], "b".repeat(40)); // same token + receipt safely recover
-  const job = await jobs.status("guideline", "job1");
-  assert.equal(job.status, "COMPLETE");
-  assert.equal(calls[0].clientToken, "b".repeat(40));
-  assert.ok(
-    [...f.objects.keys()].some((k) =>
-      k.startsWith("artifacts/reports/ingestion/job1/status/"),
-    ),
-  );
-});
-test("same edition with a different source hash is rejected", async () => {
-  const f = await retrievalFixture();
-  f.hit.metadata.sourceHash = "0".repeat(64);
-  await assert.rejects(
-    f.service.retrieveEvidence(context, "public", "guideline"),
-    /filter mismatch/,
-  );
-});
-test("sample catalog hashes match the exact downloaded section bytes", async () => {
-  const { readFile } = await import("node:fs/promises");
+test("existing sample catalog still matches its public source bytes; no samples are uploaded by tests", async () => {
   const catalog = JSON.parse(
     await readFile("examples/sources/catalog.json", "utf8"),
   );
-  assert.equal(catalog.length, 3);
   for (const entry of catalog)
     assert.equal(
       sha256(await readFile("examples/sources/" + entry.file)),

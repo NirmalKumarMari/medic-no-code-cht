@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { App } from "aws-cdk-lib";
 import { Template, Match } from "aws-cdk-lib/assertions";
 import { StorageStack } from "../infra/storage-stack.js";
-test("two private versioned KMS buckets, one matching vector index and three unchunked sources", () => {
-  const t = Template.fromStack(new StorageStack(new App(), "TestStorage"));
-  t.resourceCountIs("AWS::S3::Bucket", 2);
-  t.allResourcesProperties("AWS::S3::Bucket", {
+test("one private retained versioned KMS artifact bucket; no knowledge base, vector or ingestion resources", () => {
+  const t = Template.fromStack(new StorageStack(new App(), "test"));
+  t.resourceCountIs("AWS::S3::Bucket", 1);
+  t.hasResourceProperties("AWS::S3::Bucket", {
     VersioningConfiguration: { Status: "Enabled" },
     PublicAccessBlockConfiguration: {
       BlockPublicAcls: true,
@@ -14,7 +14,7 @@ test("two private versioned KMS buckets, one matching vector index and three unc
       IgnorePublicAcls: true,
       RestrictPublicBuckets: true,
     },
-    BucketEncryption: Match.objectLike({
+    BucketEncryption: {
       ServerSideEncryptionConfiguration: [
         Match.objectLike({
           ServerSideEncryptionByDefault: Match.objectLike({
@@ -22,39 +22,43 @@ test("two private versioned KMS buckets, one matching vector index and three unc
           }),
         }),
       ],
-    }),
-  });
-  t.resourceCountIs("AWS::S3Vectors::VectorBucket", 1);
-  t.hasResourceProperties("AWS::S3Vectors::Index", {
-    Dimension: 1024,
-    DistanceMetric: "cosine",
-    MetadataConfiguration: {
-      NonFilterableMetadataKeys: [
-        "AMAZON_BEDROCK_TEXT",
-        "AMAZON_BEDROCK_METADATA",
-      ],
     },
   });
-  t.resourceCountIs("AWS::Bedrock::DataSource", 3);
-  t.allResourcesProperties("AWS::Bedrock::DataSource", {
-    VectorIngestionConfiguration: {
-      ChunkingConfiguration: { ChunkingStrategy: "NONE" },
-    },
-  });
-  const doc = JSON.stringify(t.toJSON());
-  assert.match(doc, /bedrock:Retrieve/);
-  assert.match(doc, /AgentRoleNames/);
-  assert.match(doc, /s3:if-none-match/);
+  for (const type of [
+    "AWS::Bedrock::KnowledgeBase",
+    "AWS::Bedrock::DataSource",
+    "AWS::S3Vectors::VectorBucket",
+    "AWS::S3Vectors::Index",
+    "AWS::BedrockAgentCore::Memory",
+  ])
+    t.resourceCountIs(type, 0);
+  t.resourceCountIs("AWS::Bedrock::Guardrail", 1);
+  t.resourceCountIs("AWS::Bedrock::GuardrailVersion", 1);
+  const allows = Object.values(t.toJSON().Resources)
+    .flatMap((r: any) => r.Properties?.PolicyDocument?.Statement ?? [])
+    .filter((s: any) => s.Effect === "Allow");
+  const json = JSON.stringify(allows);
+  for (const action of [
+    "bedrock:Retrieve",
+    "bedrock:InvokeModel",
+    "s3vectors:",
+    "bedrock:StartIngestionJob",
+  ])
+    assert.ok(!json.includes(action), action);
   t.hasResourceProperties("AWS::IAM::ManagedPolicy", {
-    PolicyDocument: Match.objectLike({
+    PolicyDocument: {
       Statement: Match.arrayWith([
-        Match.objectLike({
-          Effect: "Deny",
-          Action: Match.arrayWith(["bedrock:Retrieve", "s3vectors:*"]),
-        }),
+        Match.objectLike({ Effect: "Deny", Action: "s3:*" }),
       ]),
-    }),
+    },
   });
-  t.resourceCountIs("AWS::DynamoDB::Table", 0);
-  t.resourceCountIs("AWS::Lambda::Function", 0);
+  const bucket = Object.values(t.toJSON().Resources).find(
+    (r: any) => r.Type === "AWS::S3::Bucket",
+  ) as any;
+  assert.equal(bucket.DeletionPolicy, "Retain");
+  assert.ok(
+    !Object.keys(t.toJSON().Outputs).some((k) =>
+      /KnowledgeBase|Vector|DataSource|KbSource/i.test(k),
+    ),
+  );
 });

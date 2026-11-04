@@ -1,49 +1,53 @@
-import { randomUUID } from "node:crypto";
 import { ArtifactStore } from "../src/artifacts.js";
-import { RetrievalService } from "../src/retrieval.js";
-import type { ArtifactRef, AuthorizedContext } from "../src/contracts.js";
+import { PromptContextBuilder } from "../src/prompt-context.js";
+import type {
+  ArtifactRef,
+  PublishedSource,
+  PromptContextRequest,
+  PromptMode,
+} from "../src/contracts.js";
+import {
+  snapshotBundleSchema,
+  type SnapshotBundle,
+} from "../packages/workflow-data/src/model.js";
+
+/** Backend reserves the real workflow identity and validates the author separately. */
 export async function registerSnapshot(
   artifacts: ArtifactStore,
+  input: { changeId: string; snapshotId: string; bundle: SnapshotBundle },
   register: (input: {
     changeId: string;
     snapshotId: string;
+    bundle: SnapshotBundle;
     artifact: ArtifactRef;
   }) => Promise<void>,
 ) {
-  const changeId = randomUUID(),
-    snapshotId = randomUUID();
+  const bundle = snapshotBundleSchema.parse(input.bundle);
   const artifact = await artifacts.putArtifact(
-    `snapshots/${changeId}/${snapshotId}/logic.json`,
-    Buffer.from(JSON.stringify({ schemaVersion: 1, synthetic: true })),
+    `snapshots/${input.changeId}/${input.snapshotId}/logic.json`,
+    Buffer.from(JSON.stringify(bundle)),
     "application/json",
   );
-  await artifacts.getArtifactVersion(artifact); // Yash must verify this before conditional registration.
-  await register({ changeId, snapshotId, artifact }); // Failure leaves an unregistered object, never an approved state.
-  return artifact;
+  await artifacts.getArtifactVersion(artifact);
+  await register({ ...input, bundle, artifact }); // The closure calls createDraft/registerRevision with verified human/execution context.
+  return artifact; // A registration error leaves an orphan, never an approved state.
 }
-export async function gatewayTool(
-  service: RetrievalService,
-  trustedContext: AuthorizedContext,
-  input: {
-    query: string;
-    sourceType: "guideline" | "cht-docs" | "reference-config";
-  },
+/** Server-side pre-inference step, never an agent-facing Gateway search tool. */
+export async function buildPromptContext(
+  builder: PromptContextBuilder,
+  trustedContext: PromptContextRequest,
+  mode: PromptMode,
+  source: PublishedSource,
 ) {
-  // Identity/policy checked by Gateway + backend; trustedContext is loaded from the pinned snapshot.
-  return service.retrieveEvidence(
-    trustedContext,
-    input.query,
-    input.sourceType,
-  );
+  return builder.prepare(trustedContext, mode, source);
 }
 export async function rollbackStaging(
   artifacts: ArtifactStore,
   priorApprovedManifest: ArtifactRef,
 ) {
-  // Build/deploy owner checks approval and expected target revision; stage bytes BEFORE the no-network container.
   const refs = await artifacts.verifyManifest(priorApprovedManifest);
   const staged = [];
   for (const ref of refs)
     staged.push({ ref, bytes: await artifacts.getArtifactVersion(ref) });
-  return staged;
+  return staged; // Deployer separately checks exact approval/target revision and verifies actual CHT state.
 }

@@ -12,7 +12,7 @@ export const it: HumanContext = { tenantId, subject: 'synthetic-it', groups: ['i
 export const reviewer: HumanContext = { tenantId, subject: 'synthetic-reviewer', groups: ['program_reviewer'] };
 const evidenceFixture: ArtifactRef = { bucket: 'synthetic-artifact-fixture', key: 'reports/synthetic-evidence.json', versionId: 'fixture-version', sha256: sha256('synthetic evidence'), contentType: 'application/json' };
 export const bundle: SnapshotBundle = { schemaVersion: '1', baselineRevision: 'fixture-baseline-v1',
-  spec: { title: 'Synthetic configuration test - not a clinical pathway', fields: [{ id: 'sample', type: 'text' }] },
+  spec: { title: 'Synthetic configuration test - not a clinical pathway', fields: [{ id: 'sample', type: 'text' }], rules: [{ id: 'fixture-rule', when: { input: 'sample', eq: 'synthetic' }, then: { action: 'record_synthetic_sample' } }] },
   evidenceVersions: [{ sourceId: 'synthetic-source', version: 'fixture-v1', sha256: sha256('synthetic source'), sourceS3Ref: evidenceFixture }],
   retrievalEvidenceRefs: [evidenceFixture],
   goldenCaseVersion: 'fixture-golden-v1', compilerVersion: 'fixture-compiler-v1', toolchainImageDigest: `sha256:${'a'.repeat(64)}` };

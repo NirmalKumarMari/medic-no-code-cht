@@ -20,6 +20,8 @@ export const snapshotBundleSchema = z.object({
   spec: z.record(z.string(), jsonSchema),
   evidenceVersions: z.array(z.object({ sourceId: idSchema, version: z.string().min(1), sha256: digestSchema,
     sourceS3Ref: artifactRefSchema }).strict()).min(1),
+  // Legacy field name retained so source binding does not require a hash-format migration.
+  // References now capture full guideline/primer text supplied directly in prompts.
   retrievalEvidenceRefs: z.array(artifactRefSchema),
   goldenCaseVersion: z.string().min(1), compilerVersion: z.string().min(1),
   toolchainImageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
@@ -91,6 +93,6 @@ export function hasRole(ctx: HumanContext, allowed: Role[]): void {
   requireData(ctx.groups.some(g => allowed.includes(g)), 'FORBIDDEN', 'Role is not permitted for this operation');
 }
 export function safeDecision(row: Item): Item {
-  const { changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds } = row;
-  return Object.fromEntries(Object.entries({ changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds }).filter(([, v]) => v !== undefined));
+  const { changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, historyFlags } = row;
+  return Object.fromEntries(Object.entries({ changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, historyFlags }).filter(([, v]) => v !== undefined));
 }

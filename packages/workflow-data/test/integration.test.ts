@@ -10,7 +10,7 @@ before(async () => { const { client, tables } = await createTables(`vera-local-$
 const code = (expected: string) => (error: unknown) => (error as WorkflowDataError).code === expected;
 
 test('snapshot hash is independent of object insertion order and changes with toolchain/evidence', () => {
-  assert.equal(snapshotHash(bundle), snapshotHash({ ...bundle, spec: { fields: bundle.spec.fields!, title: bundle.spec.title! } }));
+  assert.equal(snapshotHash(bundle), snapshotHash({ ...bundle, spec: { rules: bundle.spec.rules!, fields: bundle.spec.fields!, title: bundle.spec.title! } }));
   assert.notEqual(snapshotHash(bundle), snapshotHash({ ...bundle, compilerVersion: 'fixture-compiler-v2' }));
   assert.notEqual(snapshotHash(bundle), snapshotHash({ ...bundle, evidenceVersions: [{ ...bundle.evidenceVersions[0]!, version: 'v2' }] }));
 });
@@ -38,21 +38,21 @@ test('open ambiguity blocks review even when a caller marks validation passed', 
   assert.equal((await h.repo.getChange(author, f.changeId)).state, 'draft_failed');
   await assert.rejects(() => h.open(f, 'content'), code('INVALID_STATE'));
 });
-test('content review requires frozen retrieval evidence, not only source/version labels', async () => {
+test('content review requires frozen prompt context evidence, not only source/version labels', async () => {
   const f = await h.create({ ...bundle, retrievalEvidenceRefs: [] });
   await h.repo.recordValidation(f.worker, { changeId: f.changeId, snapshotHash: f.hash, passed: true, requiresClinician: false, openAmbiguities: 0, report: h.ref({}) });
   await assert.rejects(() => h.open(f, 'content'), code('MISSING_EVIDENCE'));
   assert.notEqual(snapshotHash(bundle), snapshotHash({ ...bundle, retrievalEvidenceRefs: [] }));
 });
-test('retrieval audit indexes the exact receipt once and rejects altered or stale request IDs', async () => {
+test('prompt context audit indexes the exact receipt once and rejects altered or stale request IDs', async () => {
   const f = await h.create(); const requestId = randomUUID();
-  const evidenceRef = { ...h.ref({ fixture: 'retrieved chunks' }), key: `reports/${f.changeId}/retrieval/v1/${requestId}.json` };
-  const input = { changeId: f.changeId, snapshotId: 'v1', requestId, queryHash: 'a'.repeat(64), evidenceRef };
-  await h.repo.recordRetrievalAudit(f.worker, input); await h.repo.recordRetrievalAudit(f.worker, input);
-  assert.equal((await h.repo.listAudit(author, f.changeId)).items.filter(r => r.type === 'retrieval.recorded').length, 1);
-  await assert.rejects(() => h.repo.recordRetrievalAudit(f.worker, { ...input, queryHash: 'b'.repeat(64) }), code('IDEMPOTENCY_CONFLICT'));
-  await assert.rejects(() => h.repo.recordRetrievalAudit(f.worker, { ...input, snapshotId: 'v2' }), code('STALE_SNAPSHOT'));
-  await assert.rejects(() => h.repo.recordRetrievalAudit({ ...f.worker, tenantId: 'other' }, input), code('NOT_FOUND'));
+  const evidenceRef = { ...h.ref({ fixture: 'retrieved chunks' }), key: `reports/${f.changeId}/context/v1/${requestId}.json` };
+  const input = { changeId: f.changeId, snapshotId: 'v1', requestId, contextHash: 'a'.repeat(64), evidenceRef };
+  await h.repo.recordPromptContext(f.worker, input); await h.repo.recordPromptContext(f.worker, input);
+  assert.equal((await h.repo.listAudit(author, f.changeId)).items.filter(r => r.type === 'prompt_context.recorded').length, 1);
+  await assert.rejects(() => h.repo.recordPromptContext(f.worker, { ...input, contextHash: 'b'.repeat(64) }), code('IDEMPOTENCY_CONFLICT'));
+  await assert.rejects(() => h.repo.recordPromptContext(f.worker, { ...input, snapshotId: 'v2' }), code('STALE_SNAPSHOT'));
+  await assert.rejects(() => h.repo.recordPromptContext({ ...f.worker, tenantId: 'other' }, input), code('NOT_FOUND'));
 });
 test('clinical content requires clinician and author cannot decide own content', async () => {
   const f = await h.checked(); await h.open(f, 'content');
