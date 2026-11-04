@@ -22,7 +22,7 @@ Both are passing and `cdk synth` produces a valid template as of this commit —
 
 ```
 Intake → [IntakeOk?] → [RouteByRequestKind]
-  → plain_language_edit: ChangePlan → LogicChecks
+  → plain_language_edit: [IsReplan?] → ChangePlan or Replan → [ChangePlanOk?] → LogicChecks
   → otherwise:           DraftContext → [DraftContextOk?] → [IsRedraft?] → Draft or Redraft → [DraftOk?] → LogicChecks
   → [ChecksPassed?] → ContentApproval (⏸ waits for a person in the UI) → [ContentApproved?]
        reject  → RecordContentRejection ($.revision) → back to RouteByRequestKind (drafting phase)
@@ -36,7 +36,7 @@ Intake → [IntakeOk?] → [RouteByRequestKind]
 
 Each step's result is kept in `$` at its own path: `$.intake`, `$.draftContext`, `$.draft` or `$.changePlan`, `$.logicChecks`, `$.contentApproval`, `$.compile`, `$.buildTest`, `$.deployApproval`, `$.deploy`. A re-run after a rejection overwrites the earlier result at the same path.
 
-**Approval gates.** The gate's `summary` (stored with the task token) is small: `changeId`, `tenant`, `requestKind`, `pathway`, `runId`, `logicChecks`, plus `buildTest` at deploy. It never holds the guideline text. The decision callback's output is stored at `$.contentApproval` / `$.deployApproval` and must carry `decision: "approve" | "reject"`, the same field as the workflow-data `CallbackPayload`. A `reject` must also carry string `notes`; workflow-data's `recordDecision` includes them in the callback payload. The run records `{ gate, notes }` at `$.revision` and sends it to the re-draft (Draft path) or the Change Planner (inside `$`). A reject without notes stops at `InvalidApprovalDecision`. `approvals-api` sends `decision` and `notes`, and refuses a rejection with empty notes.
+**Approval gates.** The gate's `summary` (stored with the task token) is small: `changeId`, `tenant`, `requestKind`, `pathway`, `runId`, `logicChecks`, plus `buildTest` at deploy. It never holds the guideline text. The decision callback's output is stored at `$.contentApproval` / `$.deployApproval` and must carry `decision: "approve" | "reject"`, the same field as the workflow-data `CallbackPayload`. A `reject` must also carry string `notes`; workflow-data's `recordDecision` includes them in the callback payload. The run records `{ gate, notes }` at `$.revision` and sends it to the re-draft (Draft path) or the re-plan (Change Planner path). A reject without notes stops at `InvalidApprovalDecision`. `approvals-api` sends `decision` and `notes`, and refuses a rejection with empty notes.
 
 **Two things flagged on purpose, not silently done** (also called out in code comments in `cdk/lib/orchestrator-stack.ts`):
 
@@ -49,7 +49,7 @@ Each step's result is kept in `$` at its own path: `$.intake`, `$.draftContext`,
 
 `{ "changeId": "...", "tenant": "...", "request": <IntakeRequest> }`. The execution name becomes the `runId`, so it must match `[A-Za-z0-9][A-Za-z0-9_.-]*` (the default UUID names do).
 
-### Agent envelope (Intake, DraftContext, Draft)
+### Agent envelope (Intake, DraftContext, Draft, ChangePlan)
 
 Defined in `schemas/src/agent-envelope.ts` (`@vera/schemas`). The orchestrator sends:
 
@@ -73,11 +73,15 @@ The envelope is the same for every agent; what differs is `output`. `requestKind
 - **Draft** (`agents/drafting`, `POST /draft`): `payload` = `{ spec: $.intake.output, guidelineText: $.draftContext.output.text }`. `output` = `LogicModel`. Refuses `plain_language_edit`.
 - **Redraft** (same endpoint, after a rejection): the same payload plus `revision: { gate, notes, previousLogicModel: $.draft.output }`. The notes are screened with the rest of the prompt, and the model must address them while still citing only the guideline.
 
+- **ChangePlan** (`agents/change-planner-agent`, `POST /change-plan`), stored at `$.changePlan`: `payload` = `{ spec: $.intake.output }`. `output` = `ChangePlan` (`snapshotId`, `snapshotHash`, `proposedLogicModel`, `hashInputs`, `operations`, `riskLevel`, `flags`, `status`, `approvalStatus: "unapproved"`). Refuses anything but `plain_language_edit`. The planner fetches its own baseline by `baselineSnapshotHash` through the Gateway.
+- **Replan** (same endpoint, after a rejection): the same payload plus `revision: { gate, notes }`. The notes go in the uncached part of the prompt and are screened with the rest of it. No previous plan is sent; the planner re-plans from the authoritative baseline.
+- **Worker auth.** The planner refuses non-loopback calls without its Bearer token (`WORKER_AUTH_TOKEN`). Store that token as the SecretString of a Secrets Manager secret and pass its ARN as the `changePlannerTokenSecretArn` deploy parameter. `invoke-worker` reads it (only that secret), caches it for 5 minutes, re-reads after a 401, and never returns or logs it. A 401, 429 (busy) or 413 is a service fault and ends at `WorkerUnavailable`.
+- **`needs_clarification`.** A plan with open flags still returns `ok: true` and goes to Logic Checks, where open flags block content review (workflow-data `recordValidation`). Nothing in the state machine applies or approves a plan.
+
 ### Steps not yet on the envelope
 
 These receive the whole `$` as the body. Their reply is stored at their own path, so they don't need to echo earlier fields:
 
-- **ChangePlan** (not on `main` yet), stored at `$.changePlan`: expected to include at least `{ changeId, snapshotId, snapshotHash, flags: [...] }` for Logic Checks to consume.
 - **LogicChecks**, stored at `$.logicChecks`: must include `passed: boolean`.
 - **Compile** (`$.compile`) / **BuildTest** (`$.buildTest`): BuildTest's reply must include `passed: boolean` and `logicMustChange: boolean`, which drive the build-failure split (design doc section 6, decision #7).
 - **Deploy** (`$.deploy`): no particular shape required; it's the terminal state.

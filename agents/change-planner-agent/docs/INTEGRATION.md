@@ -43,10 +43,10 @@ Operations include add/modify/remove input/rule, final rule/input order, and fin
 The orchestrator owner must:
 
 1. Route Intake using `requestKind === 'plain_language_edit'`. The old separate orchestrator branch's `changeType === 'edit'` choice is stale.
-2. Call the private `/change-plan` endpoint with authenticated worker access. Do not embed worker/Identity/CHT secrets in execution JSON or prompts.
+2. Call the private `/change-plan` endpoint with authenticated worker access, using the shared agent envelope (`src/handler.ts`). Do not embed worker/Identity/CHT secrets in execution JSON or prompts. *(Done in `orchestrator/cdk`: the token comes from Secrets Manager via `invoke-worker`; only the secret ARN is in the execution.)*
 3. Send `needs_clarification` or unresolved flags to a human, never automatically apply/approve them.
 4. Verify/apply/register the new snapshot through the shared storage/repository lifecycle. The baseline read/draft store do not implement this transition.
-5. Run logic checks, deterministic rejected-rule lookup, content approval, compile/offline build and synthetic tests, deploy approval and separate deployment. Preserve actor separation and hash binding. No automatic re-drafting after clinician rejection.
+5. Run logic checks, deterministic rejected-rule lookup, content approval, compile/offline build and synthetic tests, deploy approval and separate deployment. Preserve actor separation and hash binding. *Team decision (2026-11-04, differs from this original guidance):* a rejection at either gate re-runs the planner with the reviewer's notes (`revision`), and the new plan goes through logic checks and content approval again. A person still decides at both gates; nothing is applied or approved automatically.
 
 Per run: one happy-path Bedrock call, primary repair, escalated final repair (3 maximum). No retry/escalation after screening/provider/network errors. Shared runtime deadline 105s; screening/tool requests ≤10s, model requests ≤25s. Provider availability and actual deployment timing still need a cloud smoke test.
 

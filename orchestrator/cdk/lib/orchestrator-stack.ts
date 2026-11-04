@@ -2,6 +2,7 @@ import { CfnOutput, CfnParameter, Duration, Stack, type StackProps } from "aws-c
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import type { Construct } from "constructs";
@@ -58,7 +59,14 @@ export class OrchestratorStack extends Stack {
       "Trusted prompt-context worker endpoint (PromptContextBuilder, mode drafting): returns the full guideline text for Drafting",
     );
     const draftAgentUrl = workerUrl("draftAgentUrl", "Drafting / Clinical Review Agent POST /draft endpoint (guideline_upload / pathway_pick path)");
-    const changePlannerAgentUrl = workerUrl("changePlannerAgentUrl", "Change Planner Agent endpoint (edit path)");
+    const changePlannerAgentUrl = workerUrl("changePlannerAgentUrl", "Change Planner Agent POST /change-plan endpoint (plain_language_edit path)");
+    // The Change Planner refuses non-loopback calls without its worker Bearer
+    // token (WORKER_AUTH_TOKEN). The token lives in Secrets Manager; only this
+    // ARN is in the template and the execution, never the token.
+    const changePlannerTokenSecretArn = new CfnParameter(this, "changePlannerTokenSecretArn", {
+      type: "String",
+      description: "Secrets Manager secret ARN whose SecretString is the Change Planner's WORKER_AUTH_TOKEN",
+    }).valueAsString;
     const logicChecksUrl = workerUrl("logicChecksUrl", "Deterministic logic-checks service endpoint");
     const compileUrl = workerUrl("compileUrl", "Deterministic compiler service endpoint");
     const buildTestUrl = workerUrl("buildTestUrl", "Build/test sandbox trigger endpoint");
@@ -90,6 +98,12 @@ export class OrchestratorStack extends Stack {
       environment: { TOKENS_TABLE_NAME: tokensTable.tableName },
     });
     tokensTable.grantWriteData(requestApprovalFn);
+    // invoke-worker reads ONLY the Change Planner's worker token, nothing else.
+    secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      "ChangePlannerTokenSecret",
+      changePlannerTokenSecretArn,
+    ).grantRead(invokeWorkerFn);
 
     // ---- Helper to build a plain worker-call task (no approval wait).
     // The worker gets the whole `$` and its JSON reply is stored at
@@ -111,11 +125,18 @@ export class OrchestratorStack extends Stack {
     // AgentResult { agent, changeId, runId, tenant, ok, output | failure }.
     // The result is stored at `resultPath`, so the execution input
     // (changeId, tenant, request) and earlier results stay in `$`.
-    const callAgent = (name: string, url: string, payload: unknown, resultPath: string) =>
+    const callAgent = (
+      name: string,
+      url: string,
+      payload: unknown,
+      resultPath: string,
+      authSecretArn?: string,
+    ) =>
       new tasks.LambdaInvoke(this, name, {
         lambdaFunction: invokeWorkerFn,
         payload: sfn.TaskInput.fromObject({
           workerUrl: url,
+          ...(authSecretArn ? { authSecretArn } : {}),
           body: {
             changeId: sfn.JsonPath.stringAt("$.changeId"),
             runId: sfn.JsonPath.stringAt("$$.Execution.Name"),
@@ -206,13 +227,37 @@ export class OrchestratorStack extends Stack {
       },
       "$.draft",
     );
+    // Change Planner (plain_language_edit path), on the agent envelope:
+    //   $.changePlan  AgentResult<ChangePlan>
+    // First plan, and a re-plan after a human rejection that also carries the
+    // reviewer's notes from $.revision. The planner always re-plans from the
+    // authoritative baseline it fetches itself, so no previous plan is sent.
+    const changePlanTask = callAgent(
+      "ChangePlanTask",
+      changePlannerAgentUrl,
+      { spec: sfn.JsonPath.objectAt("$.intake.output") },
+      "$.changePlan",
+      changePlannerTokenSecretArn,
+    );
+    const replanTask = callAgent(
+      "ReplanTask",
+      changePlannerAgentUrl,
+      {
+        spec: sfn.JsonPath.objectAt("$.intake.output"),
+        revision: {
+          gate: sfn.JsonPath.stringAt("$.revision.gate"),
+          notes: sfn.JsonPath.stringAt("$.revision.notes"),
+        },
+      },
+      "$.changePlan",
+      changePlannerTokenSecretArn,
+    );
+
     // Not on the agent envelope yet: these get the whole `$`, and their reply
     // is stored at the path below.
-    //   $.changePlan  Change Planner reply
     //   $.logicChecks { passed: boolean, ... }
     //   $.contentApproval / $.deployApproval  human decision { decision: "approve" | "reject", ... }
     //   $.compile, $.buildTest { passed: boolean, logicMustChange: boolean, ... }, $.deploy
-    const changePlanTask = callWorker("ChangePlanTask", changePlannerAgentUrl, "$.changePlan");
     const logicChecksTask = callWorker("LogicChecksTask", logicChecksUrl, "$.logicChecks");
     const approvalSummary = {
       changeId: sfn.JsonPath.stringAt("$.changeId"),
@@ -265,6 +310,7 @@ export class OrchestratorStack extends Stack {
       draftTask,
       redraftTask,
       changePlanTask,
+      replanTask,
       logicChecksTask,
       contentApprovalTask,
       compileTask,
@@ -280,10 +326,21 @@ export class OrchestratorStack extends Stack {
         .when(sfn.Condition.booleanEquals(`${resultPath}.ok`, true), next)
         .otherwise(agentFailed(`${name.replace(/Ok$/, "")}Failed`, resultPath));
 
+    // First plan, or a re-plan carrying the rejection? Same rule as IsRedraft.
+    // A `needs_clarification` plan still goes on to logic checks: its open
+    // flags block content review there (workflow-data recordValidation), and a
+    // person resolves them; nothing here applies or approves the plan.
+    const isReplan = new sfn.Choice(this, "IsReplan")
+      .when(sfn.Condition.isPresent("$.revision"), replanTask)
+      .otherwise(changePlanTask);
+    const changePlanOk = okOr("ChangePlanOk", "$.changePlan", logicChecksTask);
+    changePlanTask.next(changePlanOk);
+    replanTask.next(changePlanOk);
+
     // Route on the StructuredSpec's requestKind (Intake's output, not the envelope):
     // plain_language_edit -> Change Planner, guideline_upload / pathway_pick -> Drafting.
     const routeByRequestKind = new sfn.Choice(this, "RouteByRequestKind")
-      .when(sfn.Condition.stringEquals("$.intake.output.requestKind", "plain_language_edit"), changePlanTask)
+      .when(sfn.Condition.stringEquals("$.intake.output.requestKind", "plain_language_edit"), isReplan)
       .otherwise(draftContextTask);
 
     // First draft, or a re-draft carrying the rejection? `$.revision` only
@@ -295,7 +352,6 @@ export class OrchestratorStack extends Stack {
     const draftOk = okOr("DraftOk", "$.draft", logicChecksTask);
     draftTask.next(draftOk);
     redraftTask.next(draftOk);
-    changePlanTask.next(logicChecksTask);
 
     const checksPassed = new sfn.Choice(this, "ChecksPassed")
       .when(sfn.Condition.booleanEquals("$.logicChecks.passed", true), contentApprovalTask)

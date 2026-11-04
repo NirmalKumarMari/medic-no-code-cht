@@ -110,11 +110,18 @@ function assertBounds(raw: unknown) {
       for (const child of Object.values(v)) pending.push([child, d + 1]);
   }
 }
+/** A human rejection of the previous proposal that the re-plan must address. */
+export interface PlannerRevision {
+  gate: "content" | "deploy";
+  /** The reviewer's rejection notes, verbatim. */
+  notes: string;
+}
 export async function runChangePlannerAgent(
   raw: unknown,
   tools: Tools,
   converse: ConverseFn,
   settings = config,
+  revision?: PlannerRevision,
 ): Promise<ChangePlan> {
   const request = EditChangeRequestSchema.parse(raw);
   if (request.requestKind !== "plain_language_edit")
@@ -185,6 +192,7 @@ export async function runChangePlannerAgent(
     request,
     baseline,
     settings.bedrock.promptCaching,
+    revision,
   );
   const usage: ChangePlan["execution"]["usage"] = [];
   let parsed: ReturnType<typeof ModelProposalSchema.parse> | undefined;
