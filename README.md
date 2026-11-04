@@ -18,17 +18,17 @@ Changes must also stay safe. In Medic's own audit, a missing pair of brackets wo
 
 | # | Step | Who | What happens |
 |---|---|---|---|
-| 1 | Intake | AI | Turns the request into a structured spec |
-| 2 | Draft | AI | Drafts the pathway's logic, citing every rule to its guideline passage; flags gaps and ambiguities |
-| 3 | Cross-check *(should-have)* | AI | Re-derives the logic with a different model family; disagreements are flagged |
-| 4 | Logic checks | Code | Missing branches, overlapping conditions, unreachable questions, catch-all rows, ~12 golden cases |
-| 5 | **Content approval** | Clinician | Approves or rejects the exact snapshot (bound to its `snapshotHash`) |
-| 6 | Compile | Code | Approved logic becomes XLSForm and `tasks.js`, deterministically |
-| 7 | Build and test | Code | Fresh, no-network container runs `cht-conf` and synthetic patients through every branch |
-| 8 | History check *(should-have)* | AI + code | Flags similarities and exact matches to past rejected decisions, advisory only |
-| 9 | **Deploy approval** | IT lead | Reviews the diff, test report and history flags |
-| 10 | Deploy | Code | A separate deployer role uploads with `cht-conf` and verifies the instance |
+| 1 | Intake | AI | Turns the request into a structured spec (one non-looping call, no tools) |
+| 2 | Draft | AI | Drafts the pathway's logic from the guideline text in its prompt, citing every rule; flags gaps and ambiguities |
+| 3 | Logic checks | Code | Missing branches, overlapping conditions, unreachable questions, catch-all rows, ~12 golden cases, and an exact-fingerprint check against past rejected rules |
+| 4 | **Content approval** | Clinician | Approves or rejects the exact snapshot (bound to its `snapshotHash`) |
+| 5 | Compile | Code | Approved logic becomes XLSForm and `tasks.js`, deterministically |
+| 6 | Build and test | Code | Fresh, no-network container runs `cht-conf` and synthetic patients through every branch |
+| 7 | **Deploy approval** | IT lead | Reviews the diff, test report and any history flags |
+| 8 | Deploy | Code | A separate deployer role uploads with `cht-conf` and verifies the instance |
 | | Sync | CHT | Health workers' phones get the update on their next sync |
+
+The cost/over-engineering review on 2026-11-04 (ADR-010 to ADR-013) cut the Cross-Check agent, replaced the Knowledge Base with prompt-stuffing, and folded the history check into the logic checks as deterministic code. See the solution design and `architecture-decisions.md`.
 
 **Edit journey:** a plain-language edit ("add a danger sign that triggers referral") goes to the Change Planner agent, which proposes a structured plan. Code applies it as a new snapshot, which enters at logic checks and goes through every step after it.
 
@@ -53,15 +53,17 @@ Vera holds all ten of Medic's rules:
 
 ## Agents
 
+Two real agents, plus the Change Planner for the edit journey. Everything else that touches clinical meaning is deterministic code (ADR-010 to ADR-013).
+
 | Agent | Priority | Job | Model tier | Can never |
 |---|---|---|---|---|
-| Intake | Must | Request into a `StructuredSpec` | Haiku-tier | Compile, upload, approve, write KB or memory |
-| Drafting / Clinical Review | Must | `LogicModel` with citations and flags | Haiku-tier, escalates to Sonnet-tier after 2 schema failures | Compile, upload, approve, write config or memory |
-| Change Planner | Must (edit journey) | Plain-language edit into a `ChangePlan` | Haiku-tier | Write XLSForm or `tasks.js`, upload, approve |
-| Cross-Check | Should | Second, independent `LogicModel` | Sonnet-tier, always a different model family than the draft | Same as Drafting |
-| History Check | Should | Advisory flags from past decisions | Haiku-tier | Write decisions or memory, approve, upload, block a run |
+| Intake | Must | Request into a `StructuredSpec`; one non-looping call, no tools | Haiku-tier | Compile, upload, approve, retrieve, write memory |
+| Drafting / Clinical Review | Must | `LogicModel` with citations and flags; guideline text in the prompt, not retrieved | Haiku-tier, escalates to Sonnet-tier after 2 schema failures | Compile, upload, approve, write config or memory |
+| Change Planner | Must (edit journey) | Plain-language edit into a `ChangePlan`; CHT-conventions primer in the prompt | Haiku-tier | Write XLSForm or `tasks.js`, upload, approve |
 
-Agents run as **Strands Agents in containers on EC2**. They reach tools only through **AgentCore Gateway**, with **AgentCore Policy (Cedar)** set to deny by default. Approve, deploy, compile, build, test and file-writing tools are never registered on the agent Gateway and are explicitly denied by policy. Each agent is limited to 4 tool calls and 2 model turns per attempt before failing to a human.
+The **history check is deterministic code, not an agent** (ADR-013): an exact rule-fingerprint lookup folded into the logic checks. The **Cross-Check agent was cut** (ADR-012).
+
+Agents run as **Strands Agents in containers on EC2**. They reach tools only through **AgentCore Gateway**, with **AgentCore Policy (Cedar)** set to deny by default. Approve, deploy, compile, build, test and file-writing tools are never registered on the agent Gateway and are explicitly denied by policy. Intake and Change Planner make one Bedrock call on the happy path plus up to 2 schema-repair attempts before failing to a human.
 
 ## Architecture
 
@@ -71,17 +73,17 @@ Agents run as **Strands Agents in containers on EC2**. They reach tools only thr
 | Compute | EC2 (Ubuntu, x86_64): t3.xlarge for services and agents, t3.large for the CHT test instance |
 | Agents | Strands Agents in Docker containers (not AgentCore Runtime) |
 | Agent tools, permissions, identity, tracing | AgentCore Gateway, Policy (Cedar), Identity, Observability |
-| Decision memory | AgentCore Memory (summaries of past decisions, written by code only) |
+| Decision history | DynamoDB fingerprints + S3 decision log, written by code only (no AgentCore Memory — ADR-013) |
 | Models | Amazon Bedrock via `us.` inference profiles, smallest model per job |
-| Input screening | Bedrock Guardrails on drafting inputs and KB ingestion |
-| Knowledge Base | Bedrock Knowledge Base, Titan Text Embeddings V2, Amazon S3 Vectors |
+| Input screening | Bedrock Guardrails on drafting and intake inputs |
+| Grounding | Guideline text and CHT-conventions primer stuffed into prompts, with caching (no Knowledge Base or vector store — ADR-011) |
 | State and audit | DynamoDB (`Changes`, `Approvals`, `Audit`, `Tokens`) + S3 (versioned, SSE-KMS) |
 | Build and test | One-off container from pinned `medicmobile/cht-app-ide`, no network, non-root, read-only snapshot |
 | Deployer | Separate step and IAM role; the only reader of the CHT login in Secrets Manager, and only after deploy approval |
 | Access | Systems Manager Session Manager (no open SSH), Cognito groups for approvers |
 | Infrastructure as code | Terraform *(or CDK in TypeScript; see [Tools and why](#tools-and-why))* |
 
-**Not used:** AgentCore Runtime, Lambda for application logic, Fargate, SageMaker, RDS, model endpoints outside Bedrock, public S3 buckets.
+**Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Lambda for application logic, Fargate, SageMaker, RDS, model endpoints outside Bedrock, public S3 buckets.
 
 ### Grounding (no Knowledge Base)
 
@@ -114,11 +116,10 @@ The history check is deterministic code, not an agent (ADR-013): it looks up rul
 ├── infra/                      # Terraform (or CDK) for every AWS resource
 ├── statemachine/               # Step Functions definition
 ├── agents/
-│   ├── intake/
-│   ├── drafting/
-│   ├── change-planner/
-│   ├── cross-check/
-│   └── history-check/
+│   ├── intake-agent/           # Request -> StructuredSpec (one call, no tools)
+│   ├── drafting/               # StructuredSpec -> LogicModel (guideline in prompt)
+│   ├── change-planner/         # Plain-language edit -> ChangePlan
+│   └── history-check/          # Deterministic exact-fingerprint check (not an agent)
 ├── services/
 │   ├── logic-checks/           # Deterministic validators + golden cases
 │   ├── compiler/               # LogicModel -> XLSForm + tasks.js
@@ -126,8 +127,7 @@ The history check is deterministic code, not an agent (ADR-013): it looks up rul
 │   └── review-ui/              # Clinician and IT approval screens
 ├── build-image/                # Dockerfile from pinned medicmobile/cht-app-ide
 ├── schemas/                    # StructuredSpec, LogicModel, ChangePlan
-├── golden-cases/               # ~12 cases from the guideline, confirmed by Medic
-└── kb-sources.json             # Pinned Knowledge Base sources
+└── golden-cases/               # ~12 cases from the guideline, confirmed by Medic
 ```
 
 ## Getting started
