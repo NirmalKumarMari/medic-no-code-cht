@@ -187,3 +187,33 @@ Companion to [[Medic Mobile - FINAL Solution Design (Open Path)]]. That document
 **Why it matters:** The genuinely serverless parts of this architecture (Bedrock, Step Functions, DynamoDB on-demand) scale cost with usage, which is correct for a bursty, low-volume workload. The EC2-hosted parts carry a fixed cost whether or not a change is submitted that month, and that cost multiplies per additional ministry if each gets its own isolated stack. If this becomes a real deployment conversation, the honest recommendation is to move the agent/build tier to scale-to-zero compute — Fargate, or notably AgentCore Runtime itself (deliberately not used per ADR-003, for hackathon-scope reasons that don't automatically apply to a production workload with different traffic and operational characteristics).
 
 **Consequences:** None for the hackathon build. A note to raise explicitly in any post-hackathon handover conversation with Medic, before assuming the demo's infrastructure choices should ship as-is.
+
+---
+
+### ADR-015: No chat-based approver UX
+
+**Status:** Decided.
+
+**Context:** §20 of the design doc left the approver UX open — "decision table, flowchart, chat, or a combination." Some of the original team docs this project synthesized from floated an optional chat affordance for the clinician's review step ("ask the agent what happens for a child under two months"). Separately, a question came up about whether cutting AgentCore Memory (ADR-013) would block that kind of interactive, multi-turn review experience.
+
+**Decision:** No chat. The program officer's request into Intake stays a single form-style submission; the clinician's review stays a single structured view (a decision table or flowchart over the approved `LogicModel`), not a back-and-forth conversation.
+
+**Why:** Confirmed directly — chat was never actually going to be built for this project. This closes out the last open item in §20's approver-UX decision and means neither side of the human-facing interaction needs any session/conversation state at all: Intake and Change Planner are already single Bedrock calls (ADR-010/011), and the review screen is a static render of the approved snapshot, not a stateful dialogue.
+
+**Note on the memory question that prompted this:** even if chat *had* been chosen, it would not have required reinstating AgentCore Memory. The two are different kinds of memory entirely — AgentCore Memory (cut in ADR-013) is for long-term, cross-session, semantic recall across *different changes made months apart*; a chat UI only needs short-term, single-session conversation state (the same `messages: Message[]` array already used inside each agent's one Bedrock call, just spanning more turns). That lighter mechanism was never dependent on Memory and was never cut — there was simply never a chat feature decided on to need it.
+
+**Consequences:** No session-state design, storage, or security surface to build for either the intake or review interactions. If a conversational review UX is ever reconsidered later, the lightweight session-state approach above is the right starting point — not AgentCore Memory.
+
+---
+
+### ADR-016: No Amazon Textract — Claude on Bedrock reads the guideline PDF directly
+
+**Status:** Decided (closes an open either/or in §14).
+
+**Context:** The design doc originally left "how the guideline PDF's text gets read" as an undecided choice between two options: Amazon Textract (a dedicated OCR/document-extraction service — pulls text, tables, and form fields out of a scanned document, with no reasoning ability of its own) or Claude on Bedrock reading the PDF directly, since Claude models natively accept PDF documents — including tables and charts — as input to the Converse API. The doc deferred this to "pick by measured accuracy during setup," i.e., never actually decided.
+
+**Decision:** No Textract. Claude on Bedrock reads the guideline PDF directly; the resulting text goes straight into the Drafting Agent's prompt (ADR-011), never through a separate OCR step.
+
+**Why:** Once ADR-011 already committed to prompt-stuffing rather than a retrieval pipeline, adding Textract as a standalone preprocessing service would be one more piece of infrastructure to wire up, operate, and pay for, for a task Claude already does as part of reading the document anyway. Textract's OCR output can also mangle exactly the content that matters most here — decision charts and tables in a clinical guideline — where Claude's native document understanding tends to do better. Same reasoning that already removed the Knowledge Base: don't add a service the problem doesn't actually need just because it's available.
+
+**Consequences:** One fewer managed service in the architecture. §14's "Not used" list now explicitly includes Textract rather than leaving it as an undecided maybe. If a future guideline turns out to be a low-quality scan where Claude's direct PDF reading measurably struggles, Textract remains available to reconsider — but that's a measured response to an observed problem, not a default.
