@@ -49,7 +49,7 @@ node --env-file=agents/change-planner-agent/.env.local \
   agents/change-planner-agent/dist/server.js
 ```
 
-`GET /healthz` checks process health; `POST /change-plan` accepts the shared edit StructuredSpec. Non-loopback listeners require an injected worker Bearer token. The configured inference profiles must be available in your workshop account. No static AWS credentials or CHT credentials belong in the request or repository.
+`GET /healthz` checks process health; `POST /change-plan` takes the shared agent envelope from `@vera/schemas` (`{ changeId, runId, tenant, payload: { spec, revision? } }`, where `spec` is the edit StructuredSpec and `revision` is `{ gate, notes }` on a re-plan after a human rejection). It always answers 200 with an `AgentResult` (`ok: true` with the `ChangePlan`, or `ok: false` with a `failure`); see `src/handler.ts`. Only 401 (worker token), 429 (busy) and 413 (body over 64 KiB) are non-2xx. Non-loopback listeners require an injected worker Bearer token. The configured inference profiles must be available in your workshop account. No static AWS credentials or CHT credentials belong in the request or repository.
 
 Gateway is a thin adapter exposing exactly a deterministic baseline read and unapproved proposal-draft write. No direct storage/KB fallback. Those shared services, Identity/Cedar/collector wiring, and the deterministic apply/register step must still be supplied by their owners. The token file reader is not an Identity broker.
 

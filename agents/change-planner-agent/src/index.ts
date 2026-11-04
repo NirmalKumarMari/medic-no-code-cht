@@ -3,7 +3,15 @@ export {
   ChangePlannerAgentError,
   createBedrockConverse,
   type ConverseFn,
+  type PlannerRevision,
 } from "./agent.js";
+export {
+  handleChangePlan,
+  ChangePlanPayloadSchema,
+  type ChangePlanPayload,
+  type ChangePlannerResult,
+  type RunPlanner,
+} from "./handler.js";
 export {
   ChangePlanSchema,
   BaselineSnapshotSchema,
