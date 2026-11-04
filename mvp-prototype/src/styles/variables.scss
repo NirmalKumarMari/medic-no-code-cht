@@ -1,0 +1,41 @@
+// Medic / CHT colour palette, taken from cht-core
+// (webapp/src/css/private-vars.less), so the prototype looks like Medic's app.
+//
+// Accessibility adjustments (WCAG 2.2 AA):
+// - Medic's red (#E33030) is 4.4:1 on white, below the 4.5:1 needed for text.
+//   It is kept for borders and shapes; text uses a darker red.
+// - Medic's #777777 grey is 4.48:1 on white, so secondary text uses Medic's
+//   darker grey (#545454). #777777 stays for input borders, which need 3:1.
+
+:root {
+  // Brand
+  --mm-primary: #007AC0;            // blue-dark: buttons and links (4.6:1 on white)
+  --mm-primary-dark: #23527C;       // blue-ultra-dark: hover and focus
+  --mm-primary-highlight: #EFF5F9;  // blue-highlight
+
+  // Status
+  --mm-error: #E33030;              // red: borders and shapes only
+  --mm-error-text: #C62828;         // darker red for text (5.6:1 on white)
+  --mm-error-highlight: #FDF1EF;    // pink-highlight
+  --mm-warning: #C78330;            // yellow-dark: borders and shapes only
+  --mm-warning-highlight: #FCF6E7;  // yellow-highlight
+  --mm-teal-dark: #218E7F;          // teal-dark: "done" and "passed" borders
+  --mm-teal-highlight: #E4EFEF;     // teal-highlight
+
+  // Text
+  --mm-text: #333333;               // gray-ultra-dark
+  --mm-text-secondary: #545454;     // grey-darker (7.6:1 on white)
+  --mm-text-inverse: #FFFFFF;
+
+  // Surfaces
+  --mm-bg: #F2F2F2;                 // gray-ultra-light
+  --mm-surface: #FFFFFF;
+  --mm-surface-alt: #F8F8F8;        // gray-ultra-lighter
+  --mm-border: #E0E0E0;             // gray-light: decorative borders
+  --mm-border-strong: #777777;      // gray-dark: input borders
+  --mm-code-bg: #1A1A1A;            // medium-black
+  --mm-code-text: #F2F2F2;
+
+  --mm-radius: 6px;
+  --mm-focus: #23527C;
+}
