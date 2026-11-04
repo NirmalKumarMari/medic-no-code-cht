@@ -17,7 +17,7 @@ AI drafts and hand edits get identical checks (design rule 3). A failing check p
 | review-ui-approvals | Displays the Check_Report to the approver; records content approvals in the Decision_Log. |
 | build-test-sandbox | Requests expected Outcomes and the coverage set from the Expected_Outcome_Service for synthetic-patient tests. |
 | authoring-agents | Produce the Snapshots and Flags that are checked; receive no access to golden cases through this spec. |
-| cht-config-compiler, cht-deployer, decision-memory-history-check | No direct interface; downstream of a passing check run. |
+| cht-config-compiler, cht-deployer | No direct interface; downstream of a passing check run. |
 | platform-infrastructure | Provides the Artifact_Bucket and the compute and IAM roles that run the Logic_Checker. |
 
 ## Glossary

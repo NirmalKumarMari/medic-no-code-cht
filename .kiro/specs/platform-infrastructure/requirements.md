@@ -4,11 +4,21 @@
 
 This spec covers the AWS platform that the other Vera specs run on: infrastructure as code, network, IAM, security baseline, observability, cost controls, and the deploy/teardown lifecycle (solution design §14, §15, §17, §18, §19, §20 and the README deploy/teardown instructions). It provisions resources and permissions only. The runtime behaviour of each component is owned by the dependent specs listed below and is not restated here.
 
-**Dependent specs (consume resources from this spec):** logic-model-snapshots, authoring-agents, logic-checks-golden-cases, pipeline-orchestrator, review-ui-approvals, cht-config-compiler, build-test-sandbox, cht-deployer, decision-memory-history-check.
+**Dependent specs (consume resources from this spec):** logic-model-snapshots, authoring-agents, logic-checks-golden-cases, pipeline-orchestrator, review-ui-approvals, cht-config-compiler, build-test-sandbox, cht-deployer, rejected-rule-check.
+
+### Change log
+
+| Date | Change |
+|---|---|
+| 2026-11-04 | IaC fixed to AWS CDK in TypeScript (Requirement 1.1, glossary, Open Question 1 resolved). |
+| 2026-11-04 | Screening_Guardrail default entity list revised (Requirement 3.1, Open Question 10 resolved). AGE stays unblocked because guidelines need ages. USERNAME and PIN moved to future scope with user access. |
+| 2026-11-04 | Pipeline_Tables encryption stated explicitly as AWS-managed keys, matching the deployed tables (Requirement 4.9). |
+| 2026-11-04 | Removed the stale dependency on the replaced decision-memory-history-check spec, including Agent_Memory and the Memory_Writer. AgentCore Memory added to the Not_Used_List. |
+| 2026-11-04 | Marked Requirement 2.4 (seven prefix outputs, including `decision-log/` and `deploy-records/`) as not yet implemented. |
 
 ## Glossary
 
-- **Platform_IaC**: The single infrastructure-as-code project defined by this spec, written in Terraform (Medic's standard) or CDK in TypeScript.
+- **Platform_IaC**: The single infrastructure-as-code project defined by this spec, written in AWS CDK in TypeScript (the CDK app in `infra/`, run through `cdk.json`).
 - **Deploy_Command**: The one documented command that provisions the whole platform into an AWS account in `us-west-2`.
 - **Teardown_Command**: The one documented command that removes every resource the Deploy_Command created.
 - **Platform_Checks**: The set of scripted, repeatable verification checks defined in Requirement 10.
@@ -22,18 +32,17 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 - **CHT_Test_Instance**: The t3.large Ubuntu x86_64 EC2 instance running the CHT test server.
 - **Platform_VPC**: The VPC containing private subnets for compute and, when the Optional_ALB is enabled, one public subnet.
 - **Optional_ALB**: The Application Load Balancer in front of the Review_API, created only when enabled by configuration.
-- **Agent_Gateway**: The AgentCore Gateway exposing the Gateway_Tools that the authoring-agents and decision-memory-history-check specs register as MCP tools.
+- **Agent_Gateway**: The AgentCore Gateway exposing the Gateway_Tools that the authoring-agents spec registers as MCP tools.
 - **Gateway_Policy**: The AgentCore Policy (Cedar) attached to the Agent_Gateway that enforces each agent's allowed-tool list.
 - **Workload_Identity**: An AgentCore Identity workload identity assigned to exactly one agent container.
-- **Agent_Memory**: The AgentCore Memory resource with a long-term strategy, used for decision-history learning only.
 - **Agent_Observability**: AgentCore Observability, exporting agent traces via OpenTelemetry to CloudWatch.
 - **Approver_User_Pool**: The Amazon Cognito user pool with groups `program_officer`, `program_reviewer`, `clinician` and `it_deploy`.
 - **CHT_Login_Secret**: The Secrets Manager secret holding the CHT_Test_Instance login.
 - **Component_Role**: A least-privilege IAM role owned by exactly one component.
 - **Deployer_Role**: The Component_Role of the cht-deployer component and the only reader of the CHT_Login_Secret.
-- **Decision_Recorder**, **Config_Compiler**, **Sandbox_Runner**, **Review_API**, **Memory_Writer**: Components defined in the dependent specs, each with its own Component_Role.
+- **Decision_Recorder**, **Config_Compiler**, **Sandbox_Runner**, **Review_API**: Components defined in the dependent specs, each with its own Component_Role.
 - **Deterministic_Services**: The non-AI services (for example logic checks) defined in the dependent specs, each with its own Component_Role.
-- **Not_Used_List**: AgentCore Runtime, Lambda functions running application logic, Fargate, SageMaker, RDS, Aurora, Kinesis, MSK, and model endpoints outside Amazon Bedrock.
+- **Not_Used_List**: AgentCore Runtime, AgentCore Memory, Lambda functions running application logic, Fargate, SageMaker, RDS, Aurora, Kinesis, MSK, and model endpoints outside Amazon Bedrock.
 - **Cost_Report**: The script that computes token use and cost per pipeline run from model invocation logs.
 - **Build_Hours**: The configured daily window during which EC2 instances run.
 
@@ -45,11 +54,11 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 
 #### Acceptance Criteria
 
-1. THE Platform_IaC SHALL define every resource in this spec in one project written in either Terraform or CDK in TypeScript.
+1. THE Platform_IaC SHALL define every resource in this spec in one AWS CDK app written in TypeScript.
 2. WHEN an operator runs the Deploy_Command with credentials for an AWS account that contains no resource carrying the Project_Tag, THE Platform_IaC SHALL provision every resource in this spec, place every regional resource in `us-west-2` whatever default region the operator's AWS profile sets, and exit with status 0.
 3. WHEN an operator runs the Deploy_Command against an already-deployed platform with unchanged source and unchanged configuration values, THE Platform_IaC SHALL report zero resources to create, update or delete and exit with status 0.
 4. IF any resource fails to provision during a Deploy_Command run, THEN THE Deploy_Command SHALL exit with a non-zero status and print the name of each failed resource together with the error AWS returned for it.
-5. THE Platform_IaC SHALL publish as named outputs, readable after the Deploy_Command exits with status 0, every resource identifier the dependent specs consume, including bucket names, Pipeline_Tables names, the State_Machine ARN, the Agent_Gateway URL, the Approver_User_Pool ID, the Screening_Guardrail ID and version, the Agent_Memory ID and each Component_Role ARN.
+5. THE Platform_IaC SHALL publish as named outputs, readable after the Deploy_Command exits with status 0, every resource identifier the dependent specs consume, including bucket names, Pipeline_Tables names, the State_Machine ARN, the Agent_Gateway URL, the Approver_User_Pool ID, the Screening_Guardrail ID and version, and each Component_Role ARN.
 6. WHEN an operator runs the Teardown_Command, THE Teardown_Command SHALL delete every resource the Deploy_Command created, including all object versions and delete markers in the Artifact_Bucket, every EBS volume and every CloudWatch Logs log group that platform resources write to.
 7. WHEN the Teardown_Command finishes deleting resources, THE Teardown_Command SHALL list every remaining resource in `us-west-2` and in global services that carries the Project_Tag, leaving out the Platform_KMS_Key while it is pending deletion, and exit with status 0 if the list is empty and with a non-zero status otherwise.
 8. THE Platform_IaC SHALL provision zero resources of any type on the Not_Used_List.
@@ -64,7 +73,7 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 1. THE Platform_IaC SHALL provision the Artifact_Bucket with versioning enabled.
 2. THE Platform_IaC SHALL set the default encryption of the Artifact_Bucket to SSE-KMS with the Platform_KMS_Key as the encryption key.
 3. THE Platform_IaC SHALL enable the four S3 Block Public Access settings `BlockPublicAcls`, `IgnorePublicAcls`, `BlockPublicPolicy` and `RestrictPublicBuckets` on the Artifact_Bucket.
-4. THE Platform_IaC SHALL publish exactly seven Artifact_Bucket prefix outputs, one each for `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/`, `decision-log/` and `deploy-records/`, with each output value equal to the prefix string including its trailing slash.
+4. THE Platform_IaC SHALL publish exactly seven Artifact_Bucket prefix outputs, one each for `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/`, `decision-log/` and `deploy-records/`, with each output value equal to the prefix string including its trailing slash. **Status: not yet implemented (to do).** The CDK publishes no prefix outputs, and `decision-log/` and `deploy-records/` are not yet used by any role or by the artifact store.
 5. THE Platform_IaC SHALL deny `s3:DeleteObjectVersion` on the Artifact_Bucket to every principal, including every Component_Role, except the operator principal that runs the Deploy_Command and the Teardown_Command.
 6. THE Platform_IaC SHALL grant `kms:Decrypt` and `kms:GenerateDataKey` on the Platform_KMS_Key only to the operator principal that runs the Deploy_Command and the Component_Roles that read or write a bucket or the CHT_Login_Secret.
 7. WHEN the Teardown_Command has deleted the Artifact_Bucket and the CHT_Login_Secret, THE Teardown_Command SHALL schedule the Platform_KMS_Key for deletion with the minimum 7-day waiting period and report the key as pending deletion instead of as a remaining resource.
@@ -76,7 +85,9 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 
 #### Acceptance Criteria
 
-1. THE Platform_IaC SHALL provision the Screening_Guardrail with a sensitive-information filter that blocks every entity type in one configuration list, whose default is NAME, EMAIL, PHONE, ADDRESS, USERNAME, PASSWORD, PIN, AWS_ACCESS_KEY and AWS_SECRET_KEY and does not include AGE.
+1. THE Platform_IaC SHALL provision the Screening_Guardrail with a sensitive-information filter that blocks every entity type in one configuration list, whose default is NAME, EMAIL, PHONE, ADDRESS, PASSWORD, AWS_ACCESS_KEY and AWS_SECRET_KEY and does not include AGE. **Status: to do.** The current CDK (`infra/storage-stack.ts`) still blocks AGE and must drop it.
+
+   *Scope note:* Vera screens public guideline text and prompt context only. Guidelines state ages (for example "children aged 2 to 59 months"), and those ages are not linked to any person, so AGE must not be blocked. Personal data about real people lives in CHT's own CouchDB, which is outside Vera. USERNAME and PIN belong to user access and are future scope (see Future scope below).
 2. THE Platform_IaC SHALL publish a numbered Screening_Guardrail version whose configuration matches the deployed Screening_Guardrail and output that version number, never `DRAFT`, as the version the dependent specs reference.
 3. THE Platform_IaC SHALL limit each Component_Role's model-invocation permission to the ARNs of the `us.` inference profiles that the component's owning spec assigns to it plus the foundation-model ARNs those profiles route to in each destination Region, with no wildcard model ARN and no model-invocation permission for a Component_Role that is assigned no inference profile.
 4. IF the Screening_Guardrail entity-type list is empty, THEN THE Deploy_Command SHALL exit with a non-zero status that names that variable before creating or changing any resource.
@@ -95,6 +106,9 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 6. THE Platform_IaC SHALL deploy the State_Machine definition supplied by the pipeline-orchestrator spec with no change other than replacing the placeholders that spec declares with the identifiers of resources provisioned by this spec.
 7. THE Platform_IaC SHALL set the State_Machine's own Component_Role as the State_Machine execution role.
 8. IF a Deploy_Command run against an already-deployed platform would replace or delete a Pipeline_Table or the State_Machine, THEN THE Deploy_Command SHALL exit with a non-zero status naming that resource before changing any resource, so that existing table items and RUNNING executions waiting on task tokens are kept.
+9. THE Platform_IaC SHALL encrypt every Pipeline_Table at rest with AWS-managed keys (DynamoDB `AWS_MANAGED` encryption), not with the Platform_KMS_Key.
+
+   *Change note (2026-11-04):* the spec previously did not state table encryption, and the Platform_KMS_Key is scoped to the Artifact_Bucket and the CHT_Login_Secret. This criterion records the encryption the deployed tables already use (`infra/workflow-data-stack.ts`), so it needs no table replacement.
 
 ### Requirement 5: Network and compute
 
@@ -113,21 +127,19 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 9. THE Platform_IaC SHALL give every private subnet a network path over which a call from an EC2 instance to the `us-west-2` endpoint of each of at least Systems Manager (including Session Manager), Bedrock, AgentCore, S3, DynamoDB, Step Functions, Secrets Manager, STS and CloudWatch (including CloudWatch Logs) receives a response from that service within 10 seconds.
 10. WHERE the Optional_ALB is disabled, THE Platform_IaC SHALL create zero public subnets in the Platform_VPC, where a public subnet is a subnet whose route table contains a route to an internet gateway.
 
-### Requirement 6: AgentCore Gateway, Policy, Identity and Memory
+### Requirement 6: AgentCore Gateway, Policy and Identity
 
-**User Story:** As an agent owner, I want the Gateway, Cedar policy, workload identities and memory provisioned with deny-by-default access, so that each agent can call only the tools on its allowed list.
+**User Story:** As an agent owner, I want the Gateway, Cedar policy and workload identities provisioned with deny-by-default access, so that each agent can call only the tools on its allowed list.
 
 #### Acceptance Criteria
 
-1. THE Platform_IaC SHALL provision the Agent_Gateway with exactly one MCP tool target for each Gateway_Tool that the authoring-agents and decision-memory-history-check specs register, and no other targets.
+1. THE Platform_IaC SHALL provision the Agent_Gateway with exactly one MCP tool target for each Gateway_Tool that the authoring-agents spec registers, and no other targets.
 2. THE Platform_IaC SHALL attach the Gateway_Policy to the Agent_Gateway in `ENFORCE` mode.
 3. THE Platform_IaC SHALL configure the Gateway_Policy to deny every tool call for which no permit statement names both the calling Workload_Identity and the requested tool, including every call from a Workload_Identity whose allowed-tool list is empty.
-4. THE Platform_IaC SHALL generate exactly one Gateway_Policy permit statement for each tool on each agent's allowed-tool list declared by the authoring-agents and decision-memory-history-check specs, scoped to that agent's Workload_Identity.
-5. IF an allowed-tool list declared by the authoring-agents or decision-memory-history-check spec names a tool that is not an Agent_Gateway MCP tool target, THEN THE Deploy_Command SHALL exit with a non-zero status that names the agent and the unregistered tool.
-6. THE Platform_IaC SHALL create exactly one Workload_Identity for each agent container declared by the authoring-agents and decision-memory-history-check specs, with no Workload_Identity shared between two containers.
+4. THE Platform_IaC SHALL generate exactly one Gateway_Policy permit statement for each tool on each agent's allowed-tool list declared by the authoring-agents spec, scoped to that agent's Workload_Identity.
+5. IF an allowed-tool list declared by the authoring-agents spec names a tool that is not an Agent_Gateway MCP tool target, THEN THE Deploy_Command SHALL exit with a non-zero status that names the agent and the unregistered tool.
+6. THE Platform_IaC SHALL create exactly one Workload_Identity for each agent container declared by the authoring-agents spec, with no Workload_Identity shared between two containers.
 7. THE Platform_IaC SHALL configure the Agent_Gateway to reject every inbound call that does not present an unexpired token issued for a Workload_Identity created by the Platform_IaC.
-8. THE Platform_IaC SHALL provision exactly one Agent_Memory resource with a long-term memory strategy.
-9. THE Platform_IaC SHALL grant Agent_Memory write actions to the Memory_Writer's Component_Role and to no other Component_Role or instance-profile role.
 
 ### Requirement 7: IAM roles, keys and secrets
 
@@ -135,7 +147,7 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 
 #### Acceptance Criteria
 
-1. THE Platform_IaC SHALL create exactly one Component_Role, used by no other component, for each agent declared by the authoring-agents and decision-memory-history-check specs, the State_Machine, the Decision_Recorder, each Deterministic_Service, the Config_Compiler, the Sandbox_Runner, the cht-deployer (Deployer_Role), the Review_API and the Memory_Writer.
+1. THE Platform_IaC SHALL create exactly one Component_Role, used by no other component, for each agent declared by the authoring-agents spec, the State_Machine, the Decision_Recorder, each Deterministic_Service, the Config_Compiler, the Sandbox_Runner, the cht-deployer (Deployer_Role) and the Review_API.
 2. THE Platform_IaC SHALL grant each Component_Role only the IAM actions and resource ARNs declared by that component's owning spec, with no wildcard (`*`) in an action or resource ARN unless the owning spec declares that wildcard.
 3. THE Platform_IaC SHALL limit each Component_Role's Artifact_Bucket permissions to object keys and list requests under the prefixes declared by that component's owning spec, giving zero Artifact_Bucket access to a Component_Role whose owning spec declares no prefix.
 4. THE Platform_IaC SHALL limit the Services_Instance instance-profile role to Systems Manager managed-node access, writing container logs to the platform's CloudWatch Logs log groups, and `sts:AssumeRole` on only the Component_Roles of components hosted on the Services_Instance.
@@ -195,7 +207,7 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 
 ## Open Questions
 
-1. Terraform or CDK in TypeScript? The design allows either; this choice fixes the Deploy_Command and Teardown_Command.
+1. **Resolved (2026-11-04):** AWS CDK in TypeScript. Deploy and teardown use `cdk deploy` and `cdk destroy` (wrapped by the root `package.json` scripts).
 2. The prefix names `decision-log/` and `deploy-records/` are assumed. Do they match what the dependent specs expect?
 3. How do private subnets reach the internet and AWS APIs? A NAT gateway costs more but the CHT_Test_Instance needs it for image pulls. VPC endpoints alone cost less.
 4. How does the Agent_Gateway reach tools on the Services_Instance in a private subnet? The design says this connectivity is not automatic.
@@ -204,4 +216,8 @@ This spec covers the AWS platform that the other Vera specs run on: infrastructu
 7. Should the Optional_ALB be on or off by default? An HTTPS listener also needs a domain for the ACM certificate.
 8. Who receives the Budgets alerts, and what are the Build_Hours window and timezone?
 9. Do IaC-internal helper Lambdas (for example, CDK custom resources that empty buckets) count as "Lambda for application logic"?
-10. **Guardrail entity list.** Requirement 3.1 leaves AGE out of the default entity list so that a public guideline full of children's ages is not blocked. Confirm the default list with Medic.
+10. **Resolved (2026-11-04): Guardrail entity list.** AGE stays out of the list because guidelines need ages and those ages are not linked to people. Personal data lives in CHT's CouchDB, outside Vera. USERNAME and PIN move to future scope.
+
+## Future scope
+
+- **User access screening.** Add USERNAME and PIN to the Screening_Guardrail entity list when Vera handles user access data. Today Vera screens only public guideline text and prompt context.

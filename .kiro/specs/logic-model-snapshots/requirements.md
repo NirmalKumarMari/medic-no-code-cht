@@ -21,7 +21,7 @@ This spec defines the data contracts and the storage service. The following conc
 | Compiling a snapshot into XLSForm and `tasks.js`, including splitting a rule's follow-up between form and task | cht-config-compiler |
 | Building, running synthetic patients, computing expected outcomes from the snapshot | build-test-sandbox |
 | Refusing to deploy non-release builds at deploy time | cht-deployer |
-| Rule fingerprints and decision memory | decision-memory-history-check |
+| Rule fingerprints and the rejected-rule check | rejected-rule-check |
 | The S3 bucket, KMS key, DynamoDB tables, IAM roles, and Bedrock Guardrails | platform-infrastructure |
 
 ## Glossary
@@ -38,12 +38,14 @@ This spec defines the data contracts and the storage service. The following conc
 - **Base_Snapshot**: The existing Snapshot that a human edit or ChangePlan modifies.
 - **snapshotId**: The human-readable identifier of a Snapshot, for example `child-cough-v3`.
 - **snapshotHash**: The SHA-256 digest of a Snapshot's Hash_Inputs. Approvals bind to the snapshotHash.
-- **Hash_Inputs**: The five components hashed into a snapshotHash: Baseline, Full_Specification, Evidence_Versions, Golden_Case_Version, and Toolchain_Identity.
-- **Baseline**: The configuration a change starts from. The design names this component without defining it (see Open Questions).
-- **Full_Specification**: The complete LogicModel content, excluding the `snapshotHash` field.
-- **Evidence_Versions**: The name and version of the guideline that the LogicModel is drafted from.
-- **Golden_Case_Version**: The version identifier of the golden-case set, supplied by the logic-checks-golden-cases spec.
-- **Toolchain_Identity**: The compiler version and the pinned `medicmobile/cht-app-ide` image tag used to compile and build the Snapshot.
+- **Hash_Inputs** (also **Snapshot_Bundle**): The document hashed into a snapshotHash, implemented as `snapshotBundleSchema` in `packages/workflow-data/src/model.ts`. It has exactly seven parts: Schema_Version, Baseline, Full_Specification, Evidence_Versions, Prompt_Context_Refs, Golden_Case_Version, and Toolchain_Identity.
+- **Schema_Version**: The `schemaVersion` string of the Snapshot_Bundle format.
+- **Baseline**: The `baselineRevision` string naming the configuration a change starts from. The design names this component without defining what it points to (see Open Questions).
+- **Full_Specification**: The `spec` object of the Snapshot_Bundle, holding the pathway logic, including its `rules`. The snapshotHash is never part of it.
+- **Evidence_Versions**: The `evidenceVersions` list of one or more source entries, each holding exactly a `sourceId`, a `version`, the SHA-256 digest of the source bytes (`sha256`), and the S3 reference of the exact stored source version (`sourceS3Ref`).
+- **Prompt_Context_Refs**: The `retrievalEvidenceRefs` list of S3 references to the exact prompt context (full guideline text or curated primer) given to a model. The field keeps its legacy name so the hash format did not change when retrieval was removed. It may be empty when a Snapshot is created but must be non-empty before content review opens.
+- **Golden_Case_Version**: The `goldenCaseVersion` string identifying the golden-case set, supplied by the logic-checks-golden-cases spec.
+- **Toolchain_Identity**: The `compilerVersion` string and the `toolchainImageDigest`, the `sha256:` digest of the pinned `medicmobile/cht-app-ide` image used to compile and build the Snapshot.
 - **Input**: A question the pathway asks, with an `id`, a `type`, and a `label`.
 - **Input-type enumeration**: The fixed set of allowed Input `type` values defined in the LogicModel_Schema. The set contains at least `integer` and `yes_no`; the full set is fixed when the schema is locked (see Open Question 5).
 - **Rule**: One LogicModel entry holding an `id`, a Condition (`when`), an action (`then`), an optional Follow_Up (`followUp`), and an optional Source (`source`).
@@ -184,6 +186,12 @@ This spec defines the data contracts and the storage service. The following conc
 
 **User Story:** As a developer, I want one canonical JSON form for every document, so that the same logic always produces the same bytes and the same hash.
 
+**Status: not done yet (on hold, 2026-11-04).** `canonicalJson` in `packages/workflow-data/src/model.ts` covers criteria 2, 3, 6 and 7 for ordinary values. Still to do:
+- Criterion 1: sort keys by Unicode code point, not UTF-16 code unit.
+- Criterion 8: reject numbers that would need exponent notation, unsafe integers, and strings with lone surrogates.
+- Criteria 4, 5, 9 and 10: no Snapshot_Parser exists yet. `snapshot-verifier.ts` uses `JSON.parse`, which accepts non-canonical bytes and duplicate keys, and silently replaces invalid UTF-8.
+- Before turning on strict parsing, check that every stored snapshot object, and the test harness, writes canonical bytes.
+
 #### Acceptance Criteria
 
 1. THE Canonical_Serializer SHALL serialize a LogicModel, StructuredSpec, ChangePlan, or Hash_Inputs document into Canonical_Form, defined as UTF-8 bytes with no byte order mark, no whitespace outside string values, and the keys of every object, at every nesting level, written in strictly ascending Unicode code point order.
@@ -204,15 +212,17 @@ This spec defines the data contracts and the storage service. The following conc
 #### Acceptance Criteria
 
 1. THE Hash_Calculator SHALL compute the snapshotHash as the SHA-256 digest of the Canonical_Form bytes of the Hash_Inputs, encoded as a 64-character lowercase hexadecimal string.
-2. THE Hash_Calculator SHALL compose the Hash_Inputs from exactly five components (the Baseline, the Full_Specification, the Evidence_Versions, the Golden_Case_Version, and the Toolchain_Identity) and from no other data, so that the Author, Origin, Designation, and creation timestamp of a Snapshot do not affect the snapshotHash.
-3. THE Hash_Calculator SHALL take the Full_Specification as the LogicModel with the `snapshotHash` field removed, so that two LogicModels that differ only in the presence or value of the `snapshotHash` field produce the same snapshotHash.
+2. THE Hash_Calculator SHALL compose the Hash_Inputs from exactly the seven Snapshot_Bundle parts (Schema_Version, Baseline, Full_Specification, Evidence_Versions, Prompt_Context_Refs, Golden_Case_Version, and Toolchain_Identity) and from no other data, so that the Author, Origin, Designation, and creation timestamp of a Snapshot do not affect the snapshotHash.
+3. THE Hash_Calculator SHALL hash the Snapshot_Bundle only and never the snapshotHash itself, so that a snapshotHash cannot depend on its own value.
 4. WHEN the Hash_Calculator receives Hash_Inputs whose Canonical_Form bytes are identical, including Hash_Inputs that differ only in object key order or insignificant whitespace, THE Hash_Calculator SHALL return the identical snapshotHash on every invocation, in every process, and on every host.
 5. WHEN the Hash_Calculator receives two Hash_Inputs whose Canonical_Form bytes differ, including by one changed value, one added or removed property, or one reordered array element in any component, THE Hash_Calculator SHALL return a different snapshotHash for each of the two Hash_Inputs.
-6. IF any of the five Hash_Inputs components is absent, null, an empty string, an empty object, or an empty array, or the Evidence_Versions lacks the guideline name or the guideline version, or the Toolchain_Identity lacks the compiler version or the `medicmobile/cht-app-ide` image tag, THEN THE Hash_Calculator SHALL return an error naming every missing or empty component and component part, and produce no snapshotHash.
-7. THE Snapshot_Store SHALL record in each Snapshot_Record the Baseline, Evidence_Versions, Golden_Case_Version, and Toolchain_Identity values used to compute the Snapshot's snapshotHash, so that computing the snapshotHash from those recorded values and the Full_Specification of the stored Snapshot returns the snapshotHash recorded in the Snapshot_Record.
-8. IF a LogicModel submitted for storage carries a `snapshotHash` that does not exactly match, by case-sensitive string comparison, the snapshotHash the Hash_Calculator computes from the submitted Hash_Inputs, THEN THE Snapshot_Store SHALL reject the submission, write no snapshot object and no Snapshot_Record, and return an error stating both the carried snapshotHash and the computed snapshotHash.
-9. IF the guideline name or guideline version in the Evidence_Versions differs from the guideline name or guideline version in the `guideline` field of the Full_Specification, THEN THE Hash_Calculator SHALL return an error stating both sets of values and produce no snapshotHash.
+6. IF the Schema_Version, Baseline, Golden_Case_Version, or compiler version is absent or an empty string, the Full_Specification is not an object, the Evidence_Versions list is empty or has an entry that lacks or adds a property beyond `sourceId`, `version`, `sha256`, and `sourceS3Ref`, the `toolchainImageDigest` is not `sha256:` followed by 64 lowercase hexadecimal characters, or the Snapshot_Bundle has any property not listed in criterion 2, THEN THE Hash_Calculator SHALL return a validation error naming each failing part and produce no snapshotHash.
+7. THE Snapshot_Store SHALL record in each Snapshot_Record the Evidence_Versions, Prompt_Context_Refs, Golden_Case_Version, and Toolchain_Identity used to compute the snapshotHash, together with the S3 reference of the stored Snapshot_Bundle object, from which the full Hash_Inputs, including the Full_Specification, can be read back.
+8. THE Snapshot_Store SHALL compute the snapshotHash itself from the submitted Snapshot_Bundle and SHALL accept no snapshotHash supplied by the submitter.
+9. WHEN a Snapshot is registered, THE Snapshot_Store SHALL first read the stored Snapshot_Bundle object at its recorded S3 version, check that its SHA-256 matches the recorded digest, and check that the snapshotHash recomputed from the stored object equals the snapshotHash of the submitted Snapshot_Bundle, and SHALL write no Snapshot_Record if any check fails.
 10. IF the Hash_Calculator returns an error for a snapshot submission, THEN THE Snapshot_Store SHALL reject the submission, write no snapshot object and no Snapshot_Record, and return the Hash_Calculator's error.
+
+*Change note (2026-11-04):* Requirement 8 was rewritten to match the implemented `snapshotBundleSchema` and `snapshotHash()` in `packages/workflow-data/src/model.ts`. The earlier five-component list became seven parts (adding Schema_Version and Prompt_Context_Refs), the Toolchain_Identity uses an image digest instead of an image tag, the carried-versus-computed hash check became "the store computes the hash", and the check that the Evidence_Versions guideline matches the LogicModel `guideline` field was removed because the bundle does not carry those names.
 
 ### Requirement 9: Append-only snapshot storage
 
