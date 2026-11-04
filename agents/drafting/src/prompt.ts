@@ -1,13 +1,13 @@
 import type { StructuredSpec } from "@vera/schemas";
 import { LOGIC_MODEL_SCHEMA_VERSION } from "@vera/schemas";
-import type { RetrievedChunk } from "@vera/retrieval";
 
 /**
  * Prompt strategy for the Drafting / Clinical Review agent.
  *
  * Behaviour is deliberately conservative (per confirmed intent):
- *  - ground every rule strictly in the retrieved guideline chunks,
- *  - cite each rule to the chunk it came from,
+ *  - ground every rule strictly in the guideline text given in the prompt
+ *    (prompt-stuffed, not retrieved; design doc §8 / ADR-011),
+ *  - cite each rule to the section/page it came from,
  *  - NEVER invent a rule the guideline does not support,
  *  - flag gaps / ambiguities / conflicts for a human rather than resolving them.
  *
@@ -17,12 +17,12 @@ import type { RetrievedChunk } from "@vera/retrieval";
 
 export const SYSTEM_PROMPT = `You are the Drafting / Clinical Review agent in a no-code clinical configuration pipeline.
 
-Your single job: turn a structured specification plus retrieved clinical-guideline passages into one JSON "LogicModel" describing the pathway's decision logic. You draft and flag. You never compile, upload, approve, or write configuration files.
+Your single job: turn a structured specification plus the full clinical-guideline text into one JSON "LogicModel" describing the pathway's decision logic. You draft and flag. You never compile, upload, approve, or write configuration files.
 
 Hard rules you must follow:
-1. Ground every rule ONLY in the provided guideline passages. Do not use outside clinical knowledge. If the passages do not support a branch, do not invent it — raise a flag instead.
-2. Every rule must carry a "source" citation copied from the passage it came from, including the passage's chunkId. A rule you cannot cite must still be included if clinically implied by the spec, but you must add a flag of type "uncited_rule" for it.
-3. Flag, never silently resolve. Use flags for: "ambiguity" (unclear guidance), "gap" (a branch the guideline is silent on), "uncited_rule" (a rule with no supporting passage), "conflict" (passages that contradict each other).
+1. Ground every rule ONLY in the provided guideline text. Do not use outside clinical knowledge. If the guideline does not support a branch, do not invent it — raise a flag instead.
+2. Every rule must carry a "source" citation giving the section heading and page of the guideline text it came from (page 0 if the text has no page markers; add "tableId" when it came from a table). A rule you cannot cite must still be included if clinically implied by the spec, but you must add a flag of type "uncited_rule" for it.
+3. Flag, never silently resolve. Use flags for: "ambiguity" (unclear guidance), "gap" (a branch the guideline is silent on), "uncited_rule" (a rule with no supporting passage), "conflict" (parts of the guideline that contradict each other).
 4. Include exactly one catch-all rule with when = { "otherwise": true }. It is the default outcome.
 5. Only use these condition operators: eq, neq, gte, lte, gt, lt, in, all, any, not, otherwise.
 6. Only use these actions: refer_urgently, home_care_advice, treat_at_home, follow_up.
@@ -37,7 +37,7 @@ Output JSON shape:
   "guideline": { "name": "<name>", "version": "<version>" },
   "inputs": [ { "id": "snake_case", "type": "<input type>", "label": "<text>", "options": ["..."]? } ],
   "rules": [
-    { "id": "r1", "when": <condition>, "then": { "action": "<action>" }, "followUp": { "dueInDays": N, "openForDays": N }?, "source": { "section": "...", "page": N, "tableId": "..."?, "chunkId": "..." } },
+    { "id": "r1", "when": <condition>, "then": { "action": "<action>" }, "followUp": { "dueInDays": N, "openForDays": N }?, "source": { "section": "...", "page": N, "tableId": "..."? } },
     { "id": "default", "when": { "otherwise": true }, "then": { "action": "<action>" }, "source": {...}? }
   ],
   "flags": [ { "type": "<flag type>", "text": "<what is unclear>", "ruleId": "r?"?, "source": {...}? } ]
@@ -49,62 +49,78 @@ A condition is one of:
   { "input": "<id>", "in": [<string|number>, ...] }
   { "all": [<condition>, ...] }  { "any": [<condition>, ...] }  { "not": <condition> }  { "otherwise": true }`;
 
-function formatChunks(chunks: RetrievedChunk[]): string {
-  if (chunks.length === 0) {
-    return "(no guideline passages were retrieved — you must flag this as a gap and avoid inventing rules)";
+/** Guideline identity the LogicModel must carry (its `guideline` field). */
+export interface GuidelineRef {
+  name: string;
+  version: string;
+}
+
+function formatList(items: string[], empty: string): string {
+  return items.length > 0 ? items.map((i) => `- ${i}`).join("\n") : empty;
+}
+
+function formatSpec(spec: StructuredSpec, guideline: GuidelineRef): string {
+  const flags = formatList(
+    spec.flags.map((f) => `[${f.type}] ${f.text}`),
+    "(none)",
+  );
+  const lines = [
+    `Pathway: ${spec.pathway.title} (id: ${spec.pathway.id})`,
+    `Guideline: ${guideline.name} (version ${guideline.version})`,
+    `Change type: ${spec.changeType}`,
+  ];
+  if (spec.changeType === "edit") {
+    lines.push(
+      `Baseline snapshot: ${spec.baseline.snapshotId} (hash ${spec.baseline.snapshotHash})`,
+    );
   }
-  return chunks
-    .map(
-      (c) =>
-        `- chunkId: ${c.chunkId}\n  section: ${c.citation.section}` +
-        (c.citation.tableId ? ` (table ${c.citation.tableId})` : "") +
-        `, page: ${c.citation.page}\n  text: ${c.text}`,
-    )
-    .join("\n");
+  lines.push(
+    "",
+    "Request (the program officer's own words):",
+    spec.requestText,
+    "",
+    "Explicit constraints (follow exactly; do not infer others):",
+    formatList(spec.constraints, "(none)"),
+    "",
+    "Flags raised by intake (carry forward into your flags where still unresolved;",
+    'use type "ambiguity" for [ambiguity] and type "gap" for [missing_input]):',
+    flags,
+  );
+  return lines.join("\n");
 }
 
-function formatSpec(spec: StructuredSpec): string {
-  const reqs =
-    spec.requirements.length > 0
-      ? spec.requirements.map((r) => `- (${r.id}) ${r.text}`).join("\n")
-      : "(none provided)";
-  const inputs =
-    spec.candidateInputs.length > 0
-      ? spec.candidateInputs
-          .map((i) => `- ${i.id}: ${i.label}${i.type ? ` [${i.type}]` : ""}`)
-          .join("\n")
-      : "(none provided)";
-  const open =
-    spec.openQuestions.length > 0
-      ? spec.openQuestions.map((q) => `- ${q}`).join("\n")
-      : "(none)";
+/**
+ * The prompt is split in two so the large, stable part can be cached:
+ *  - `stable`: the guideline text (identical across calls for one guideline)
+ *  - `variable`: the spec and the closing instruction (changes per request)
+ * `full` is the concatenation; it is what Guardrails screens, so both the
+ * guideline text and the spec text are covered.
+ */
+export interface PromptParts {
+  stable: string;
+  variable: string;
+  full: string;
+}
 
-  return [
-    `Pathway: ${spec.pathway}`,
-    `Guideline: ${spec.guideline.name} (version ${spec.guideline.version})`,
-    `Request type: ${spec.requestType}`,
-    ``,
-    `Requirements:`,
-    reqs,
-    ``,
-    `Candidate inputs:`,
-    inputs,
-    ``,
-    `Open questions from intake (carry forward as flags where still unresolved):`,
-    open,
+export function buildPromptParts(
+  spec: StructuredSpec,
+  guideline: GuidelineRef,
+  guidelineText: string,
+): PromptParts {
+  const stable = [
+    "GUIDELINE TEXT",
+    "==============",
+    guidelineText.trim().length > 0
+      ? guidelineText.trim()
+      : "(no guideline text was provided — you must flag this as a gap and avoid inventing rules)",
+    "",
   ].join("\n");
-}
-
-export function buildUserPrompt(spec: StructuredSpec, chunks: RetrievedChunk[]): string {
-  return [
+  const variable = [
     "SPECIFICATION",
     "=============",
-    formatSpec(spec),
-    "",
-    "RETRIEVED GUIDELINE PASSAGES",
-    "============================",
-    formatChunks(chunks),
+    formatSpec(spec, guideline),
     "",
     "Produce the LogicModel JSON now. Output only the JSON object.",
   ].join("\n");
+  return { stable, variable, full: `${stable}\n${variable}` };
 }

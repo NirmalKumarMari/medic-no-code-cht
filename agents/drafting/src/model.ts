@@ -1,6 +1,7 @@
 import {
   BedrockRuntimeClient,
   ConverseCommand,
+  type ContentBlock,
   type Message,
 } from "@aws-sdk/client-bedrock-runtime";
 
@@ -19,6 +20,12 @@ export const DEFAULT_MODEL_IDS: Record<ModelTier, string> = {
 
 export interface ModelRequest {
   system: string;
+  /**
+   * Large, stable context (e.g. the guideline text). Sent before `user` with a
+   * prompt-cache checkpoint after it, so repeated drafts of the same guideline
+   * are billed at the cached rate (design doc §8).
+   */
+  cachedContext?: string;
   user: string;
   maxTokens?: number;
   temperature?: number;
@@ -52,7 +59,12 @@ export class BedrockModelClient implements ModelClient {
   }
 
   async invoke(req: ModelRequest): Promise<ModelResponse> {
-    const messages: Message[] = [{ role: "user", content: [{ text: req.user }] }];
+    const content: ContentBlock[] = [];
+    if (req.cachedContext) {
+      content.push({ text: req.cachedContext }, { cachePoint: { type: "default" } });
+    }
+    content.push({ text: req.user });
+    const messages: Message[] = [{ role: "user", content }];
     const command = new ConverseCommand({
       modelId: this.modelId,
       system: [{ text: req.system }],

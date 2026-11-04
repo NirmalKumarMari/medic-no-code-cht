@@ -3,13 +3,13 @@ import {
   parseLogicModel,
   type StructuredSpec,
 } from "@vera/schemas";
-import type { Retriever, RetrievedChunk } from "@vera/retrieval";
 import type { ModelClient } from "./model.js";
-import { buildUserPrompt, SYSTEM_PROMPT } from "./prompt.js";
+import { buildPromptParts, SYSTEM_PROMPT, type GuidelineRef } from "./prompt.js";
 import { NoopGuardrail, type Guardrail, type GuardrailDecision } from "./guardrail.js";
 
 export { BedrockModelClient, DEFAULT_MODEL_IDS } from "./model.js";
 export type { ModelClient, ModelTier } from "./model.js";
+export type { GuidelineRef } from "./prompt.js";
 export {
   BedrockGuardrail,
   NoopGuardrail,
@@ -17,20 +17,31 @@ export {
   type GuardrailDecision,
 } from "./guardrail.js";
 
-/** Bounded-autonomy limits for one drafting attempt (solution design §7). */
+/**
+ * Bounded-autonomy limits for one drafting attempt (solution design §7).
+ * The agent has no tools (the guideline is prompt-stuffed, not retrieved) and
+ * makes exactly one model call per attempt.
+ */
 export const AGENT_LIMITS = {
-  maxToolCalls: 4,
-  maxModelTurns: 2,
+  maxModelTurns: 1,
 } as const;
 
 export interface DraftingInput {
   spec: StructuredSpec;
-  /** Search queries to issue against the guideline KB (one tool call each). */
-  queries?: string[];
+  /**
+   * Full text of the guideline for this pathway, placed directly in the prompt
+   * (design doc §8 / ADR-011). Callers supply it; there is no retrieval step.
+   */
+  guidelineText: string;
+  /**
+   * Guideline name + version for the LogicModel. Optional for `new_pathway`
+   * specs (taken from `spec.guideline`: title -> name). REQUIRED for `edit`
+   * specs, which only carry a baseline snapshot reference, not the guideline.
+   */
+  guideline?: GuidelineRef;
 }
 
 export interface AgentUsage {
-  toolCalls: number;
   modelTurns: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -45,7 +56,7 @@ export type DraftingResult =
   | {
       ok: false;
       /** Reason the attempt failed — surfaced to a human / the repair loop. */
-      reason: "schema_invalid" | "no_json" | "budget_exceeded" | "guardrail_blocked";
+      reason: "invalid_input" | "schema_invalid" | "no_json" | "budget_exceeded" | "guardrail_blocked";
       /** Human/loop-readable detail. For schema_invalid this is Zod's flattened errors. */
       detail: string;
       rawOutput?: string;
@@ -74,7 +85,6 @@ export class DraftingAgent {
 
   constructor(
     private readonly model: ModelClient,
-    private readonly retriever: Retriever,
     options: DraftingAgentOptions = {},
   ) {
     // Default to Noop so local/test wiring is ergonomic, but a real run is
@@ -83,40 +93,30 @@ export class DraftingAgent {
   }
 
   async draft(input: DraftingInput): Promise<DraftingResult> {
-    let toolCalls = 0;
     let modelTurns = 0;
 
-    const queries =
-      input.queries && input.queries.length > 0
-        ? input.queries
-        : defaultQueries(input.spec);
-
-    // ---- Retrieval (each search is one tool call, budget-capped) ----
-    const chunks: RetrievedChunk[] = [];
-    const seen = new Set<string>();
-    for (const query of queries) {
-      if (toolCalls >= AGENT_LIMITS.maxToolCalls) break;
-      toolCalls += 1;
-      const results = await this.retriever.search({
-        source: "guideline",
-        query,
-        maxResults: 5,
-      });
-      for (const c of results) {
-        if (!seen.has(c.chunkId)) {
-          seen.add(c.chunkId);
-          chunks.push(c);
-        }
-      }
+    const guideline: GuidelineRef | undefined =
+      input.guideline ??
+      (input.spec.changeType === "new_pathway"
+        ? { name: input.spec.guideline.title, version: input.spec.guideline.version }
+        : undefined);
+    if (!guideline) {
+      return {
+        ok: false,
+        reason: "invalid_input",
+        detail:
+          "An edit spec carries no guideline name/version; the caller must pass `guideline` " +
+          "(from the baseline snapshot). This is a caller bug, not something for the model to guess.",
+        usage: { modelTurns },
+      };
     }
 
-    const userPrompt = buildUserPrompt(input.spec, chunks);
+    const prompt = buildPromptParts(input.spec, guideline, input.guidelineText);
 
     // ---- Guardrail screening (BEFORE the model sees anything) ----
     // Both entry points for personal data — the synthesized spec text and the
-    // retrieved guideline text — are inside userPrompt, so screening it covers
-    // both. Fail closed: if the guardrail intervenes, the model is never called.
-    const decision = await this.guardrail.screenInput(userPrompt);
+    // guideline text — are inside the full prompt, so screening it covers both. Fail closed: if the guardrail intervenes, the model is never called.
+    const decision = await this.guardrail.screenInput(prompt.full);
     if (decision.intervened) {
       return {
         ok: false,
@@ -125,7 +125,7 @@ export class DraftingAgent {
           "Input blocked by Bedrock Guardrails before drafting: " +
           (decision.reasons.length > 0 ? decision.reasons.join(", ") : "policy intervention"),
         guardrail: decision,
-        usage: { toolCalls, modelTurns },
+        usage: { modelTurns },
       };
     }
 
@@ -135,17 +135,17 @@ export class DraftingAgent {
         ok: false,
         reason: "budget_exceeded",
         detail: "Model-turn budget exhausted before drafting.",
-        usage: { toolCalls, modelTurns },
+        usage: { modelTurns },
       };
     }
     modelTurns += 1;
     const response = await this.model.invoke({
       system: SYSTEM_PROMPT,
-      user: userPrompt,
+      cachedContext: prompt.stable,
+      user: prompt.variable,
     });
 
     const usage = {
-      toolCalls,
       modelTurns,
       inputTokens: response.inputTokens,
       outputTokens: response.outputTokens,
@@ -176,13 +176,6 @@ export class DraftingAgent {
 
     return { ok: true, logicModel: parsed.data, usage };
   }
-}
-
-/** Default KB queries derived from the spec when the caller gives none. */
-function defaultQueries(spec: StructuredSpec): string[] {
-  const base = [`${spec.pathway} danger signs referral`, `${spec.pathway} classification treatment follow-up`];
-  const fromReqs = spec.requirements.slice(0, 2).map((r) => r.text);
-  return [...base, ...fromReqs];
 }
 
 /**

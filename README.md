@@ -122,7 +122,6 @@ Agents only read memory. The history check uses DynamoDB fingerprints for exact 
 │   ├── cross-check/
 │   └── history-check/
 ├── services/
-│   ├── retrieval/              # KB retrieval service (citations, logging)
 │   ├── logic-checks/           # Deterministic validators + golden cases
 │   ├── compiler/               # LogicModel -> XLSForm + tasks.js
 │   ├── deployer/               # cht-conf upload + verify (separate role)

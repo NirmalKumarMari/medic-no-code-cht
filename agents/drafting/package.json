@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.709.0",
-    "@vera/retrieval": "0.1.0",
     "@vera/schemas": "0.1.0",
     "zod": "^4.6.7"
   }

@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createStubRetriever } from "@vera/retrieval";
-import { StructuredSpecPlaceholder } from "@vera/schemas";
+import { StructuredSpecSchema, type StructuredSpec } from "@vera/schemas";
 import { DraftingAgent, extractJson, AGENT_LIMITS } from "../src/index.js";
 import type { ModelClient, ModelRequest, ModelResponse } from "../src/model.js";
 import type { Guardrail, GuardrailDecision } from "../src/guardrail.js";
@@ -27,20 +26,35 @@ class FakeGuardrail implements Guardrail {
   }
 }
 
-const spec = StructuredSpecPlaceholder.parse({
-  pathway: "Child cough and fast breathing",
-  guideline: { name: "IMCI", version: "2014" },
-  requirements: [
-    { id: "req1", text: "A child with a danger sign is referred urgently." },
-    { id: "req2", text: "Fast breathing without a danger sign is treated at home with follow-up." },
-  ],
-  candidateInputs: [
-    { id: "age_months", label: "Age in months", type: "integer" },
-    { id: "breaths_per_min", label: "Breaths per minute", type: "integer" },
-    { id: "danger_sign", label: "Any danger sign?", type: "yes_no" },
-  ],
-  openQuestions: [],
+const spec: StructuredSpec = StructuredSpecSchema.parse({
+  changeType: "new_pathway",
+  changeId: "01JTESTCHANGEID0000000000",
+  specVersion: 1,
+  pathway: { id: "child-cough-fast-breathing", title: "Child cough and fast breathing" },
+  guideline: { docId: "guidelines/imci-2014.pdf", title: "IMCI", version: "2014" },
+  requestText: "Build the child cough and fast breathing pathway from the IMCI guideline.",
+  constraints: ["Children under 2 months are out of scope."],
+  submittedBy: { role: "program_officer", userId: "officer-1" },
+  submittedAt: "2026-11-04T10:00:00.000Z",
+  flags: [{ type: "missing_input", text: "Referral destination not specified." }],
 });
+
+const editSpec: StructuredSpec = StructuredSpecSchema.parse({
+  changeType: "edit",
+  changeId: "01JTESTCHANGEID0000000001",
+  specVersion: 1,
+  pathway: { id: "child-cough-fast-breathing", title: "Child cough and fast breathing" },
+  requestText: "Raise the fast-breathing threshold for 12-59 month olds.",
+  submittedBy: { role: "program_officer", userId: "officer-1" },
+  submittedAt: "2026-11-04T10:00:00.000Z",
+  baseline: { snapshotId: "child-cough-v1", snapshotHash: "abc123" },
+});
+
+const guidelineText = `Section: Danger signs (page 12)
+A child with any general danger sign must be referred urgently.
+
+Section: Classify and treat (page 14)
+A child with fast breathing and no danger sign is treated at home with follow-up.`;
 
 const goodLogicModel = {
   schemaVersion: "logic-model/v1",
@@ -57,13 +71,13 @@ const goodLogicModel = {
       id: "r1",
       when: { input: "danger_sign", eq: "yes" },
       then: { action: "refer_urgently" },
-      source: { section: "Danger signs", page: 12, chunkId: "gl-cc-danger-signs" },
+      source: { section: "Danger signs", page: 12 },
     },
     {
       id: "default",
       when: { otherwise: true },
       then: { action: "home_care_advice" },
-      source: { section: "Classify and treat", page: 14, chunkId: "gl-cc-no-pneumonia" },
+      source: { section: "Classify and treat", page: 14 },
     },
   ],
   flags: [],
@@ -71,25 +85,25 @@ const goodLogicModel = {
 
 test("produces a valid LogicModel from a well-formed model reply", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
-  const agent = new DraftingAgent(model, createStubRetriever());
-  const result = await agent.draft({ spec });
+  const agent = new DraftingAgent(model);
+  const result = await agent.draft({ spec, guidelineText });
 
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.logicModel.pathway, "Child cough and fast breathing");
     assert.equal(result.logicModel.rules.length, 2);
-    assert.ok(result.usage.toolCalls > 0);
-    assert.ok(result.usage.toolCalls <= AGENT_LIMITS.maxToolCalls);
-    assert.equal(result.usage.modelTurns, 1);
+    assert.equal(result.usage.modelTurns, AGENT_LIMITS.maxModelTurns);
   }
 });
 
-test("passes retrieved guideline chunks into the prompt", async () => {
+test("puts the guideline text in the cached context, spec in the user message", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
-  const agent = new DraftingAgent(model, createStubRetriever());
-  await agent.draft({ spec });
-  assert.match(model.lastRequest!.user, /RETRIEVED GUIDELINE PASSAGES/);
-  assert.match(model.lastRequest!.user, /gl-cc-/); // a real chunkId made it in
+  const agent = new DraftingAgent(model);
+  await agent.draft({ spec, guidelineText });
+  assert.match(model.lastRequest!.cachedContext!, /GUIDELINE TEXT/);
+  assert.match(model.lastRequest!.cachedContext!, /A child with any general danger sign/);
+  assert.match(model.lastRequest!.user, /SPECIFICATION/);
+  assert.doesNotMatch(model.lastRequest!.user, /GUIDELINE TEXT/);
 });
 
 test("returns schema_invalid with Zod detail on a malformed model", async () => {
@@ -97,8 +111,8 @@ test("returns schema_invalid with Zod detail on a malformed model", async () => 
   // remove the catch-all -> schema violation
   bad.rules = bad.rules.filter((r) => r.id !== "default");
   const model = new FakeModel(JSON.stringify(bad));
-  const agent = new DraftingAgent(model, createStubRetriever());
-  const result = await agent.draft({ spec });
+  const agent = new DraftingAgent(model);
+  const result = await agent.draft({ spec, guidelineText });
 
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -107,10 +121,51 @@ test("returns schema_invalid with Zod detail on a malformed model", async () => 
   }
 });
 
+test("tells the model to flag a gap when no guideline text is supplied", async () => {
+  const model = new FakeModel(JSON.stringify(goodLogicModel));
+  const agent = new DraftingAgent(model);
+  await agent.draft({ spec, guidelineText: "   " });
+  assert.match(model.lastRequest!.cachedContext!, /no guideline text was provided/);
+});
+
+test("puts request text, constraints and intake flags in the prompt", async () => {
+  const model = new FakeModel(JSON.stringify(goodLogicModel));
+  const agent = new DraftingAgent(model);
+  await agent.draft({ spec, guidelineText });
+  const user = model.lastRequest!.user;
+  assert.match(user, /Child cough and fast breathing \(id: child-cough-fast-breathing\)/);
+  assert.match(user, /Guideline: IMCI \(version 2014\)/);
+  assert.match(user, /Build the child cough and fast breathing pathway/);
+  assert.match(user, /Children under 2 months are out of scope/);
+  assert.match(user, /\[missing_input\] Referral destination not specified/);
+});
+
+test("edit spec: uses the caller-supplied guideline and shows the baseline", async () => {
+  const model = new FakeModel(JSON.stringify(goodLogicModel));
+  const agent = new DraftingAgent(model);
+  const result = await agent.draft({
+    spec: editSpec,
+    guidelineText,
+    guideline: { name: "IMCI", version: "2014" },
+  });
+  assert.equal(result.ok, true);
+  assert.match(model.lastRequest!.user, /Baseline snapshot: child-cough-v1 \(hash abc123\)/);
+  assert.match(model.lastRequest!.user, /Guideline: IMCI \(version 2014\)/);
+});
+
+test("edit spec without a guideline ref fails with invalid_input and no model call", async () => {
+  const model = new FakeModel(JSON.stringify(goodLogicModel));
+  const agent = new DraftingAgent(model);
+  const result = await agent.draft({ spec: editSpec, guidelineText });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.reason, "invalid_input");
+  assert.equal(model.invoked, 0);
+});
+
 test("returns no_json when the model emits prose", async () => {
   const model = new FakeModel("I'm sorry, I can't help with that.");
-  const agent = new DraftingAgent(model, createStubRetriever());
-  const result = await agent.draft({ spec });
+  const agent = new DraftingAgent(model);
+  const result = await agent.draft({ spec, guidelineText });
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.reason, "no_json");
 });
@@ -121,8 +176,8 @@ test("blocks the model call when the guardrail intervenes", async () => {
     intervened: true,
     reasons: ["pii:NAME"],
   });
-  const agent = new DraftingAgent(model, createStubRetriever(), { guardrail });
-  const result = await agent.draft({ spec });
+  const agent = new DraftingAgent(model, { guardrail });
+  const result = await agent.draft({ spec, guidelineText });
 
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -132,22 +187,22 @@ test("blocks the model call when the guardrail intervenes", async () => {
   assert.equal(model.invoked, 0, "model must not be called after a guardrail block");
 });
 
-test("screens the full prompt (spec + retrieved chunks) as input", async () => {
+test("screens the full prompt (spec + guideline text) as input", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
   const guardrail = new FakeGuardrail({ intervened: false, reasons: [] });
-  const agent = new DraftingAgent(model, createStubRetriever(), { guardrail });
-  await agent.draft({ spec });
+  const agent = new DraftingAgent(model, { guardrail });
+  await agent.draft({ spec, guidelineText });
 
   assert.ok(guardrail.screened, "guardrail received input");
   assert.match(guardrail.screened!, /SPECIFICATION/);
-  assert.match(guardrail.screened!, /RETRIEVED GUIDELINE PASSAGES/);
+  assert.match(guardrail.screened!, /GUIDELINE TEXT/);
 });
 
 test("proceeds to the model when the guardrail passes", async () => {
   const model = new FakeModel(JSON.stringify(goodLogicModel));
   const guardrail = new FakeGuardrail({ intervened: false, reasons: [] });
-  const agent = new DraftingAgent(model, createStubRetriever(), { guardrail });
-  const result = await agent.draft({ spec });
+  const agent = new DraftingAgent(model, { guardrail });
+  const result = await agent.draft({ spec, guidelineText });
 
   assert.equal(result.ok, true);
   assert.equal(model.invoked, 1);

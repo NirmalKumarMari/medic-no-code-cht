@@ -6,8 +6,8 @@ import {
 /**
  * Bedrock Guardrails screening on the drafting input (design rule 8, §15):
  * every drafting input is screened for personal data BEFORE it reaches a model.
- * The StructuredSpec and retrieved guideline text are the two entry points for
- * personal data, so both the spec-derived text and the retrieved chunks are
+ * The StructuredSpec and the guideline text are the two entry points for
+ * personal data, so both the spec-derived text and the guideline text are
  * screened as INPUT before the drafting model call.
  *
  * Screening sits behind an interface, mirroring ModelClient, so tests inject a
