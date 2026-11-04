@@ -29,7 +29,3 @@ A rule's answer can only change at the numbers it compares against. So the gener
 - yes and no for every yes/no question
 
 Every rule is reached at least once. The script prints a warning if any rule is never reached, because that would mean the rule can never fire.
-
-## Next use
-
-The test box (Medic's `cht-conf-test-harness`) fills the real compiled CHT form with each patient's answers and checks that the form gives `expected.action`. Field names here match the logic model's input ids. The compiler must use the same ids as form field names, or keep a mapping.
