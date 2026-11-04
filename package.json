@@ -1,0 +1,23 @@
+{
+  "name": "vera",
+  "version": "0.1.0",
+  "private": true,
+  "description": "No-code CHT configuration for health ministries (Vera).",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "workspaces": [
+    "schemas",
+    "services/*",
+    "agents/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "node --test --import tsx 'agents/**/test/*.test.ts' 'schemas/test/*.test.ts'",
+    "typecheck": "tsc --build --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

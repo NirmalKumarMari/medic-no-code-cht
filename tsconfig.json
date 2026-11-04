@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./schemas" },
+    { "path": "./services/retrieval" },
+    { "path": "./agents/drafting" },
+    { "path": "./agents/history-check" }
+  ]
+}
