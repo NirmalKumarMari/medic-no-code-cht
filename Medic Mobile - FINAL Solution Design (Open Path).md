@@ -25,6 +25,8 @@
 | 11 | **No Knowledge Base, no vector store.** Guideline text and a short, curated CHT-conventions primer are stuffed directly into the Drafting and Change Planner prompts, with caching. | A full RAG pipeline is sized for "search across many documents" — a problem that doesn't exist at this scope (one guideline, one pathway). Prompt-stuffing gives the same grounding benefit with no ingestion pipeline, no embeddings, no vector-store cost floor, and no risk of retrieval missing the one passage that matters. A real Knowledge Base is a Phase 2 concern per Medic's own vision doc, not an MVP one. See [[architecture-decisions]] ADR-011. |
 | 12 | **Cross-Check Agent cut from the pipeline entirely**, not deferred. | Doubles the cost of every drafting call, forever, to catch disagreements that deterministic logic checks, golden cases, and an actual clinician's review already substantially cover. If wanted later, build it as a manual "re-draft and diff" button a clinician presses on a specific change, never an automatic pipeline step. See ADR-012. |
 | 13 | **History Check is deterministic code, not an agent.** Only the exact-fingerprint-match layer survives (a DynamoDB hash lookup, folded into Logic Checks); the AI-semantic-similarity layer is dropped. | The part that mattered — never let IT silently re-approve a rule a clinician already rejected — needs no LLM. The speculative half (semantic summarization of "similar but not identical" past decisions) isn't worth the recurring cost at Medic's likely change volume. See ADR-013. |
+| 14 | **No chat-based approver UX.** The officer's request stays a single form-style submission into Intake; the clinician's review stays a single structured view (decision table/flowchart over the LogicModel), not a conversation. | Confirmed with the team — chat was never going to be built. Keeps the officer-intake and clinician-review interactions single-shot, with no session/conversation state to design, store, or secure. See ADR-015. |
+| 15 | **No Amazon Textract. Claude on Bedrock reads the guideline PDF directly**, and the extracted text is prompt-stuffed (per Decisions Log #11), never routed through a separate OCR step. | Closes out the "pick by measured accuracy during setup" open choice. One fewer service to wire up and pay for; Claude's native PDF understanding handles tables and decision charts that a plain OCR pass can mangle. Same reasoning that already cut the Knowledge Base. See ADR-016. |
 
 ---
 
@@ -136,7 +138,7 @@ All compute — the UI/API, the orchestrator's workers, the agents, the determin
 
 **Loops:**
 - *Schema-repair loop:* a malformed agent output is retried once on the same model, then once more escalating to a stronger model; two failures in a row kill the draft and surface the error to a human — never silently guessed.
-- *Reject loop:* a clinician rejection (or a plain-language edit) creates a **new snapshot** and re-enters at state 3 (Logic checks) — never back at the Drafting agent to be re-guessed. AI drafts and hand edits always share the same checks (design rule 3).
+- *Reject loop:* a clinician rejection (or a failed check) routes back to state 2 (Draft / Change Planner), which produces a **new snapshot**, then flows on to state 3 (Logic checks) exactly as a fresh draft would — the same checks apply either way (design rule 3). **Known simplification:** the ideal target, once a dedicated revision step exists, is to re-enter directly at Logic checks with the clinician's note applied as a targeted edit, without re-running the full drafting agent. That step isn't built yet, so v1 re-runs Draft/Change Planner on every rejection. Flagged the same way in the orchestrator's own code comments.
 - *Build-failure split (Decisions Log #7):* if the failure means the approved logic itself must change, a new `snapshotHash` is created and content approval runs again. If it's a compiler or infrastructure bug with the logic unchanged, the same container rebuilds against the same hash and the existing content approval remains valid — no need to re-bother the clinician for a tooling retry.
 
 Every human decision (states 4 and 7) is written to the append-only decision log by a Step Functions step — **never by an agent**.
@@ -169,6 +171,15 @@ Both agents that need to ground their output in reference material (Drafting aga
 **Why this, not a Knowledge Base (ADR-011):** at this scope — one guideline, one pathway — a vector-search pipeline solves a problem that doesn't exist yet ("find the relevant document among many"). Putting the whole guideline in context is both cheaper (no embeddings, no vector store, no ingestion pipeline) and a *stronger* safety guarantee than top-k retrieval, since there's no risk of the retrieval step missing the one passage that matters. A real Knowledge Base earns its place once Medic has many guidelines that genuinely don't fit in context together — that's Phase 2 per their own vision doc, not the MVP.
 
 **What this does NOT change:** every drafted rule must still cite its source passage (design rule 7/5), and an uncited rule is still flagged, never silently accepted. The citation discipline is a prompt/schema requirement on the agent's output, independent of whether the source text arrived via retrieval or directly in the prompt.
+
+**End-to-end mechanics of the guideline document itself** (this is about the file, distinct from the primer, which is just curated text with no file behind it):
+
+1. **Upload.** The program officer uploads the guideline PDF through the Review UI/API. The UI writes it to **S3** under the `docs/` prefix and assigns it a `docId`; this is a Review UI/API responsibility, not something any agent does.
+2. **Reference, not re-upload.** That `docId` (plus a `version` string) is what travels through the pipeline from here on — in the `IntakeRequest`, in the resulting `StructuredSpec`'s `guideline` field, and ultimately recorded on the `LogicModel` snapshot that gets drafted from it. The raw bytes are never re-uploaded or duplicated as they move through the pipeline.
+3. **Fetch, then call Bedrock.** When the Drafting Agent runs, it fetches the PDF bytes from S3 by `docId` — a deterministic tool call, the same pattern Change Planner already uses for `getBaselineLogicModel` — and passes them to Claude as a document content block in the Converse call. No OCR step, no Knowledge Base, no ingestion pipeline; the fetch and the model call are the only two steps (ADR-011, ADR-016).
+4. **Versioning.** The bucket has S3 object versioning enabled, so even a same-key re-upload never destroys a prior version. More importantly, versioning is explicit in the data model, not just the storage layer: every `guideline` reference carries its own `version` string, and every `LogicModel` snapshot records exactly which guideline version it was drafted against. A guideline update never retroactively touches an already-approved snapshot — it produces a new submission, a new snapshot, and a fresh approval, bound to the new version (see §22's note on guideline-version drift for the operational cost this implies at scale).
+
+Note: this only applies to the **new-pathway** path. An edit never involves a guideline file at all — the officer's plain-language request and the existing `LogicModel` baseline are the only inputs Change Planner needs.
 
 ## 9. History Check (Deterministic, Not an Agent)
 
@@ -263,17 +274,17 @@ This split means the container that actually runs arbitrary build/test tooling n
 | Orchestrator | AWS Step Functions (standard workflow) | Fixed state machine; task tokens for both approval waits; visual execution graph for the demo |
 | Models | Amazon Bedrock, `us.` inference profiles | Smallest model per job behind one interface |
 | Input screening | Bedrock Guardrails | Screens every drafting input for personal data before it reaches a model |
-| Guideline reading | Claude on Bedrock (direct PDF input) or Textract | Pick by measured accuracy during setup; output goes straight into the prompt (§8), not into a KB |
+| Guideline reading | Claude on Bedrock, direct PDF input | No separate OCR step (Decisions Log #15); output goes straight into the prompt (§8), not into a KB |
 | Pipeline state | DynamoDB: `Changes`, `Approvals`, `Audit`, `Tokens` tables | PK `changeId`; see §10–11 for key design. Also holds the History Check fingerprint index (§9). |
 | Storage | S3, private, versioned, encrypted (SSE-KMS) | `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/` prefixes |
 | Secrets | Secrets Manager | CHT test instance login — readable only by the deployer role, only post-approval |
 | Access | Systems Manager Session Manager | No open SSH/admin ports; IMDSv2 required, hop limit 2 |
 | Logs/traces | CloudWatch | Every model call and container log; gives cost-per-run |
 | UI sign-in | Cognito + ALB (optional) | Session Manager port forwarding is the event-day fallback |
-| Infrastructure as code | AWS CDK in TypeScript | One deploy command (`cdk deploy`), one teardown command (`cdk destroy`) |
+| Infrastructure as code | Terraform (Medic's standard) or CDK in TypeScript | One deploy command, one teardown command |
 | Network | VPC, private subnets for compute, public subnet only for an optional ALB | Gateway→internal-tools connectivity should be smoke-tested on day 1 (it is not automatic) |
 
-**Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Lambda for application logic, Fargate, SageMaker, RDS/Aurora, Kinesis/MSK, model endpoints outside Bedrock, public S3 buckets, open SSH/admin ports.
+**Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Amazon Textract, Lambda for application logic, Fargate, SageMaker, RDS/Aurora, Kinesis/MSK, model endpoints outside Bedrock, public S3 buckets, open SSH/admin ports.
 
 ## 15. Security and Data Handling
 
@@ -348,15 +359,15 @@ Expected outcomes are always computed from the approved snapshot — never by a 
 | Day 2 PM | Deploy approval UI; separate deployer step/role; change lifecycle hash-binding and build-failure split (§6/#7/§11); full end-to-end timed run; README, cost tracking |
 | Day 3 AM | Rehearse; no new features |
 
-**Cut list, in order, if behind:** deploy upload to live CHT test instance → chat-based approver UX → UI polish. **Never cut:** logic checks, the two approvals, or synthetic-patient testing. (Cross-Check and the AI half of History Check are no longer on this list — they're cut from scope entirely, not deferred; see Decisions Log #12/#13.)
+**Cut list, in order, if behind:** deploy upload to live CHT test instance → UI polish. **Never cut:** logic checks, the two approvals, or synthetic-patient testing. (Cross-Check and the AI half of History Check are no longer on this list — they're cut from scope entirely, not deferred; see Decisions Log #12/#13. Chat-based approver UX isn't on this list either — see Decisions Log #14, it was never going to be built.)
 
 ## 20. Open Items
 
 - [ ] Final guideline + pathway (child cough and fast breathing is the working example throughout this doc, but not yet locked in by the team).
 - [ ] Smoke-test AgentCore Gateway → internal-tools connectivity on day 1 — it is not automatic and was flagged as unverified in more than one source doc.
-- [ ] Decide the approver UX: decision table, flowchart, chat, or a combination (Open path leaves this to the team).
+- [x] ~~Decide the approver UX: decision table, flowchart, chat, or a combination.~~ **Decided: a structured review view (decision table/flowchart over the LogicModel), not chat.** The officer's request stays a single form-style submission into Intake; the clinician's review stays a single static view, not a conversation. See Decisions Log #14.
 - [ ] Write the ~12 golden cases once the pathway is locked; get Medic's confirmation in the clinician role.
-- [ ] IAM role design per component (one role per agent via AgentCore Identity; separate orchestrator, det-services, deployer, and UI roles) — draft CDK constructs against §14's service table.
+- [ ] IAM role design per component (one role per agent via AgentCore Identity; separate orchestrator, det-services, deployer, and UI roles) — draft Terraform/CDK modules against §14's service table.
 - [ ] Curate the real CHT-conventions primer content for the chosen pathway (the Change Planner Agent's `primer.ts` currently ships placeholder text — see its README).
 - [ ] Confirm with whoever builds the Drafting Agent that it prompt-stuffs the guideline rather than calling a Knowledge Base tool (§7 note).
 
