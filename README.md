@@ -23,6 +23,77 @@ Step Functions drives the workflow; its task tokens park the two human approval 
 
 Rule history hashes structural `when` + `then` + optional `followUp`, normalizing object keys and conjunction/disjunction order. It matches previous content-rejected snapshots for the same tenant/pathway. Matches are high-severity **advisory** flags on content review. They are not clinical correctness judgments. No LLM or Memory service performs history lookup.
 
+## How it works
+
+| # | Step | Who | What happens |
+|---|---|---|---|
+| 1 | Intake | AI | Turns the request into a structured spec (one non-looping call, no tools) |
+| 2 | Draft | AI | Drafts the pathway's logic from the guideline text in its prompt, citing every rule; flags gaps and ambiguities |
+| 3 | Logic checks | Code | Missing branches, overlapping conditions, unreachable questions, catch-all rows, ~12 golden cases, and an exact-fingerprint check against past rejected rules |
+| 4 | **Content approval** | Clinician | Approves or rejects the exact snapshot (bound to its `snapshotHash`) |
+| 5 | Compile | Code | Approved logic becomes XLSForm and `tasks.js`, deterministically |
+| 6 | Build and test | Code | Fresh, no-network container runs `cht-conf` and synthetic patients through every branch |
+| 7 | **Deploy approval** | IT lead | Reviews the diff, test report and any history flags |
+| 8 | Deploy | Code | A separate deployer role uploads with `cht-conf` and verifies the instance |
+| | Sync | CHT | Health workers' phones get the update on their next sync |
+
+The cost/over-engineering review on 2026-11-04 (ADR-010 to ADR-013) cut the Cross-Check agent, replaced the Knowledge Base with prompt-stuffing, and folded the history check into the logic checks as deterministic code. See the solution design and `architecture-decisions.md`.
+
+**Edit journey:** a plain-language edit ("add a danger sign that triggers referral") goes to the Change Planner agent, which proposes a structured plan. Code applies it as a new snapshot, which enters at logic checks and goes through every step after it.
+
+**Reject loop:** a clinician rejection creates a new snapshot that re-enters at logic checks. The AI never silently re-guesses.
+
+**Build failures:** if the logic must change, a new `snapshotHash` and a new clinician approval are required. If it's a tooling bug with unchanged logic, the same hash is rebuilt and the existing approval stays valid.
+
+## Design rules
+
+Vera holds all ten of Medic's rules:
+
+1. Models never write compiled configuration; deterministic code compiles approved logic.
+2. Every change gets two human approvals: content before build, deploy before upload. Clinical changes need a clinician.
+3. AI drafts and hand edits take the same path and the same checks.
+4. Approval binds to one exact, versioned snapshot, never to a conversation.
+5. The approver's view comes from the same data the compiler reads.
+6. Expected outcomes come from the approved logic; a model never judges a test.
+7. Ambiguity is flagged for a person, never resolved silently.
+8. Synthetic data only; no real patient data or real CHT credentials in a prompt.
+9. Nothing generative runs on a health worker's phone.
+10. Output is standard CHT configuration that builds with `cht-conf`; every change is reversible.
+
+## Agents
+
+Two real agents, plus the Change Planner for the edit journey. Everything else that touches clinical meaning is deterministic code (ADR-010 to ADR-013).
+
+| Agent | Priority | Job | Model tier | Can never |
+|---|---|---|---|---|
+| Intake | Must | Request into a `StructuredSpec`; one non-looping call, no tools | Haiku-tier | Compile, upload, approve, retrieve, write memory |
+| Drafting / Clinical Review | Must | `LogicModel` with citations and flags; guideline text in the prompt, not retrieved | Haiku-tier, escalates to Sonnet-tier after 2 schema failures | Compile, upload, approve, write config or memory |
+| Change Planner | Must (edit journey) | Plain-language edit into a `ChangePlan`; CHT-conventions primer in the prompt | Haiku-tier | Write XLSForm or `tasks.js`, upload, approve |
+
+The **history check is deterministic code, not an agent** (ADR-013): an exact rule-fingerprint lookup folded into the logic checks. The **Cross-Check agent was cut** (ADR-012).
+
+Agents run as **Strands Agents in containers on EC2**. They reach tools only through **AgentCore Gateway**, with **AgentCore Policy (Cedar)** set to deny by default. Approve, deploy, compile, build, test and file-writing tools are never registered on the agent Gateway and are explicitly denied by policy. Intake and Change Planner make one Bedrock call on the happy path plus up to 2 schema-repair attempts before failing to a human.
+
+## Architecture
+
+| Component | Service |
+|---|---|
+| Orchestrator | AWS Step Functions (standard workflow); task tokens park both approvals |
+| Compute | EC2 (Ubuntu, x86_64): t3.xlarge for services and agents, t3.large for the CHT test instance |
+| Agents | Strands Agents in Docker containers (not AgentCore Runtime) |
+| Agent tools, permissions, identity, tracing | AgentCore Gateway, Policy (Cedar), Identity, Observability |
+| Decision history | DynamoDB fingerprints + S3 decision log, written by code only (no AgentCore Memory — ADR-013) |
+| Models | Amazon Bedrock via `us.` inference profiles, smallest model per job |
+| Input screening | Bedrock Guardrails on drafting and intake inputs |
+| Grounding | Guideline text and CHT-conventions primer stuffed into prompts, with caching (no Knowledge Base or vector store — ADR-011) |
+| State and audit | DynamoDB (`Changes`, `Approvals`, `Audit`, `Tokens`) + S3 (versioned, SSE-KMS) |
+| Build and test | One-off container from pinned `medicmobile/cht-app-ide`, no network, non-root, read-only snapshot |
+| Deployer | Separate step and IAM role; the only reader of the CHT login in Secrets Manager, and only after deploy approval |
+| Access | Systems Manager Session Manager (no open SSH), Cognito groups for approvers |
+| Infrastructure as code | AWS CDK in TypeScript (`infra/`) |
+
+**Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Lambda for application logic, Fargate, SageMaker, RDS, model endpoints outside Bedrock, public S3 buckets.
+
 ## Implemented modules
 
 - [packages/artifact-storage](packages/artifact-storage/README.md): artifact storage, reviewed source publication, full prompt-context preparation and screening. [Storage instructions](docs/STORAGE.md), [handoff](docs/HANDOFF.md).

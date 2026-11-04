@@ -1,11 +1,22 @@
 {
-  "name": "vera-storage-workspace",
+  "name": "vera",
   "version": "0.1.0",
   "private": true,
+  "description": "No-code CHT configuration for health ministries (Vera).",
+  "license": "AGPL-3.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "schemas",
+    "agents/*"
+  ],
   "scripts": {
-    "test": "npm run build && npm run test:infra && npm run test --workspaces --if-present",
-    "check": "npm run build && tsc --noEmit && npm run check --workspaces --if-present",
+    "build": "tsc --build",
+    "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json",
+    "check": "npm run typecheck && npm run check --workspaces --if-present",
+    "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",
+    "test:agents": "node --test --import tsx 'agents/**/test/*.test.ts' 'schemas/test/*.test.ts'",
+    "test:infra": "tsx --test tests/infra/*.test.ts",
     "synth": "cdk synth",
     "deploy": "cdk deploy BreakingBarriersStorage --outputs-file outputs.json",
     "destroy": "cdk destroy BreakingBarriersStorage",
@@ -15,8 +26,6 @@
     "synth:storage": "cdk synth BreakingBarriersStorage",
     "synth:workflow": "cdk synth vera-workflow-data",
     "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json",
-    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data",
-    "test:infra": "tsx --test tests/infra/*.test.ts",
     "db:local:up": "docker compose -f packages/workflow-data/compose.yaml up -d",
     "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down"
   },
@@ -31,16 +40,13 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "aws-cdk": "^2.0.0",
-    "prettier": "^3.9.10",
-    "tsx": "^4.0.0",
-    "typescript": "^5.0.0",
     "aws-cdk-lib": "^2.0.0",
-    "constructs": "^10.0.0"
+    "constructs": "^10.0.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=22"
-  },
-  "workspaces": [
-    "packages/*"
-  ]
+  }
 }

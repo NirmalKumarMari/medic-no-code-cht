@@ -275,4 +275,4 @@ Terms reused from earlier specs keep the meaning defined there.
 6. Which spec supplies the Pathway_List for a pathway pick?
 7. Should the Review_API screen uploaded guideline PDFs for personal data before storing them? No other component screens them now that knowledge base ingestion is gone.
 8. Separation of duties is scoped per changeId (stricter than per snapshotHash). Confirm that scope.
-9. **Upload and edit limits.** Requirement 2 sets a 50 MB limit on guideline PDFs and a 2,000-character limit on plain-language edit text. The design gives neither number, and logic-model-snapshots allows edit text of up to 4,000 characters in a StructuredSpec. Confirm both limits and align the edit text bound across the two specs.
+9. **Upload and edit limits.** Requirement 2 sets a 50 MB limit on guideline PDFs and a 2,000-character limit on plain-language edit text. *(Resolved 2026-11-04: the edit-text bound is 2,000 characters; logic-model-snapshots Requirement 4 was aligned to the same number, so the two specs now agree.)* The 50 MB PDF limit is still unconfirmed against the design.

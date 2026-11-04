@@ -1,0 +1,416 @@
+[
+  {
+    "name": "valid guideline_upload",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "valid pathway_pick",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "pathway_pick",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "valid plain_language_edit",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "editText": "Raise the fast-breathing threshold."
+    }
+  },
+  {
+    "name": "unknown requestKind",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "missing changeId",
+    "expect": "reject",
+    "input": {
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "changeId over 128 chars",
+    "expect": "reject",
+    "input": {
+      "changeId": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "pathway empty",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "pathway over 200 chars",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "guideline name over 300 chars",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+        "version": "1"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "guideline version over 50 chars",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "missing guideline",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "missing submittedBy",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      }
+    }
+  },
+  {
+    "name": "submittedBy role not program_officer",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "admin",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "submittedBy missing userId",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer"
+      }
+    }
+  },
+  {
+    "name": "edit without baselineSnapshotHash",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "editText": "Raise the fast-breathing threshold."
+    }
+  },
+  {
+    "name": "edit without editText",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "name": "edit with blank editText",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "editText": "   "
+    }
+  },
+  {
+    "name": "edit with 64-hex uppercase hash",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "editText": "Raise the fast-breathing threshold."
+    }
+  },
+  {
+    "name": "edit with short hash",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "abc",
+      "editText": "Raise the fast-breathing threshold."
+    }
+  },
+  {
+    "name": "editText over 2000 chars",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "editText": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    }
+  },
+  {
+    "name": "editText exactly 2000 chars",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "plain_language_edit",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "baselineSnapshotHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "editText": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    }
+  },
+  {
+    "name": "unknown extra property rejected (strict)",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      },
+      "surprise": "x"
+    }
+  },
+  {
+    "name": "unknown nested property rejected (strict)",
+    "expect": "reject",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014",
+        "extra": "x"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  },
+  {
+    "name": "non-edit may omit editText and hash",
+    "expect": "accept",
+    "input": {
+      "changeId": "01JTESTCHANGEID0000000000",
+      "requestKind": "guideline_upload",
+      "pathway": "Child cough and fast breathing",
+      "guideline": {
+        "name": "IMCI",
+        "version": "2014"
+      },
+      "submittedBy": {
+        "role": "program_officer",
+        "userId": "u1"
+      }
+    }
+  }
+]
