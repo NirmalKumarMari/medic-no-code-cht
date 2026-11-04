@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Step Functions orchestrator: pipeline state machine, DynamoDB tables, and the two Lambda glue functions that connect Step Functions to the HTTP-based worker containers.",
+  "description": "Step Functions orchestrator: pipeline state machine (using the existing vera-workflow tables) and the two Lambda glue functions that connect Step Functions to the HTTP-based worker containers.",
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "tsc -p tsconfig.json",

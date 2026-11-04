@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Completes Step Functions task tokens once a human approves or rejects. The only place SendTaskSuccess/SendTaskFailure is called from — no agent and no Lambda glue ever touches these.",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
@@ -18,7 +20,7 @@
     "@aws-sdk/lib-dynamodb": "^3.700.0",
     "fastify": "^5.0.0",
     "ulid": "^2.3.0",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

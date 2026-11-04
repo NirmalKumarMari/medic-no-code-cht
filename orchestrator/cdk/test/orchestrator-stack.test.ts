@@ -10,17 +10,29 @@ function synth() {
   return Template.fromStack(stack);
 }
 
-test("provisions the four DynamoDB tables the design doc specifies", () => {
+test("creates no DynamoDB tables; the workflow-data stack owns them", () => {
   const template = synth();
-  for (const tableName of ["Changes", "Approvals", "Audit", "Tokens"]) {
-    template.hasResourceProperties("AWS::DynamoDB::Table", {
-      TableName: tableName,
-      KeySchema: [
-        { AttributeName: "changeId", KeyType: "HASH" },
-        { AttributeName: "sk", KeyType: "RANGE" },
-      ],
-    });
-  }
+  template.resourceCountIs("AWS::DynamoDB::Table", 0);
+});
+
+test("references the existing vera-workflow tables by default", () => {
+  const json = JSON.stringify(synth().toJSON());
+  assert.match(json, /table\/vera-workflow-Changes/);
+  assert.match(json, /table\/vera-workflow-Tokens/);
+  assert.match(json, /"TOKENS_TABLE_NAME":"vera-workflow-Tokens"/);
+  // No bare legacy names left over from this stack's old tables.
+  assert.doesNotMatch(json, /table\/(Changes|Approvals|Audit|Tokens)"/);
+});
+
+test("honours a custom table prefix", () => {
+  const app = new App();
+  const stack = new OrchestratorStack(app, "PrefixStack", {
+    env: { account: "123456789012", region: "us-west-2" },
+    tablePrefix: "vera-test",
+  });
+  const json = JSON.stringify(Template.fromStack(stack).toJSON());
+  assert.match(json, /"TOKENS_TABLE_NAME":"vera-test-Tokens"/);
+  assert.throws(() => new OrchestratorStack(new App(), "Bad", { tablePrefix: "bad prefix!" }));
 });
 
 test("provisions exactly the two glue Lambdas, nothing else running app logic", () => {
@@ -37,10 +49,4 @@ test("the two approval states use WAIT_FOR_TASK_TOKEN, not a plain invoke", () =
   assert.equal(tokenMatches.length, 2, "expected exactly two waitForTaskToken states (content + deploy approval)");
 });
 
-test("points-in-time recovery is on and tables are retained, never auto-deleted", () => {
-  const template = synth();
-  template.hasResource("AWS::DynamoDB::Table", {
-    DeletionPolicy: "Retain",
-    Properties: { PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true } },
-  });
-});
+
