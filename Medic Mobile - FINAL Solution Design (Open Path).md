@@ -3,6 +3,7 @@
 **Status:** Canonical design. Build the code and IaC against this document.
 **Supersedes:** [[Medic Mobile - Solution Design (AgentCore + Bedrock)]] (earlier draft, now superseded — see its header note).
 **Synthesized from:** This doc, the Vision/Technical Environment source docs, and four team design docs reviewed and reconciled on 2026-11-03 — "Design Doc_ Team Vera," "design doc yash," "vera-design-doc," and "CHT NoCode Architecture - Jonathan H." Where those docs disagreed, the resolution is recorded in the Decisions Log below.
+**Revised 2026-11-04:** a cost/over-engineering review (see [[architecture-decisions]] ADR-010 through ADR-013) cut two agents, simplified a third, and replaced the vector-search Knowledge Base with prompt-stuffing. That review's reasoning is **not** repeated in full here — read the ADR file for the "why." This doc reflects the result.
 **Track:** Open path. **Example pathway (illustrative only, not yet finalized):** child cough and fast breathing. Final guideline/pathway choice is still open — see §20.
 
 ---
@@ -13,14 +14,17 @@
 |---|---|---|
 | 1 | **Track: Open path.** No cht-ui-builder integration. | Three of four team docs leaned Open path or left it open; only one committed to Reference path. Lower risk than modifying an unfamiliar codebase with known gaps (no approve action, inverted task conditions) under a 2-day deadline. |
 | 2 | **Orchestrator: AWS Step Functions**, not a custom EC2-hosted workflow engine. | Managed, built-in task-token approval waits, visual execution history for the demo, far less custom code to write and debug in 2 days. Matches the most detailed of the four team docs; reconfirms the earlier decision this session. |
-| 3 | **Agent hosting: plain EC2 containers**, not AgentCore Runtime. **Supersedes the earlier draft's choice of AgentCore Runtime.** AgentCore Gateway, Policy (Cedar), Identity, Memory, and Observability still wrap the agents regardless. | Majority of the team docs converged here; avoids standing up and learning Runtime's deployment model for only 4–5 lightweight agents in a 2-day build. Also removes the AgentCore-orchestration-lock-in tension flagged earlier — with Runtime out of the picture, the agents (built with a portable framework, e.g. Strands Agents) have no AWS-proprietary hosting dependency at all. |
-| 4 | **Knowledge Base: full Bedrock Knowledge Base with S3 Vectors**, kept in scope. | Directly implements the grounding/confirmation capability asked for early in this project ("can we add a knowledge base that confirms what the clinician is recommending") and is what would have caught Medic's own bracket-bug near-miss. One team doc argued to cut it for the MVP; overruled — it's load-bearing, not a nice-to-have. |
+| 3 | **Agent hosting: plain EC2 containers**, not AgentCore Runtime. **Supersedes the earlier draft's choice of AgentCore Runtime.** AgentCore Gateway, Policy (Cedar), Identity, and Observability still wrap the agents regardless. | Majority of the team docs converged here; avoids standing up and learning Runtime's deployment model for only two lightweight agents in a 2-day build. Also removes the AgentCore-orchestration-lock-in tension flagged earlier — with Runtime out of the picture, the agents (built with a portable framework, e.g. Strands Agents) have no AWS-proprietary hosting dependency at all. |
+| 4 | ~~Knowledge Base: full Bedrock Knowledge Base with S3 Vectors, kept in scope.~~ **Superseded by #11.** | — |
 | 5 | **Build/test sandbox: EC2, no network at all**, with upload as a **separate deployer step/role** that only reads CHT credentials after deploy approval. | Adopted from the Open-path team doc's design: splitting "build and test" (fully offline, no credentials) from "deploy" (a distinct role, credentials only after the second human approval) is a stronger least-privilege/blast-radius boundary than one container doing both. |
-| 6 | **Model tiering with model-diversity on cross-check**: the independent cross-check agent always uses a *different* model family than whichever model produced the draft it's checking. | Adopted from the Open-path team doc. A second pass on the *same* model is a weaker independence guarantee than a genuinely different model; this is a low-cost way to strengthen the Should-Have cross-check feature. |
+| 6 | ~~Model tiering with model-diversity on cross-check.~~ **Superseded by #12 — Cross-Check cut entirely, not just given a different model.** | — |
 | 7 | **Build/test failure handling splits two ways**: (a) the meaning must change → new `snapshotHash`, back to content approval, clinician re-approves; (b) a compiler/infra bug with unchanged logic → rebuild/rerun the *same* hash, the existing approval stays valid. | Adopted from the Open-path team doc. Avoids re-bothering a clinician for a pure tooling retry while still forcing re-approval whenever meaning actually changes — a meaningfully better reliability design than treating every build failure the same way. |
-| 8 | **Decision memory / history check (Should-have, not Must-have).** AgentCore Memory holds plain-language summaries of past approvals/rejections for agents to learn from; DynamoDB + S3 remain the exact, append-only source of truth; a History Check step flags similarities/exact-matches to IT as advisory-only (never blocking). | Adopted from one team doc's design — directly strengthens the audit and reversibility rules, cheap to build once the core pipeline works, and genuinely differentiates the demo. First item to cut if day 1 runs long, alongside independent cross-check. |
+| 8 | ~~Decision memory / history check (Should-have). AgentCore Memory holds plain-language summaries for agents to learn from.~~ **Superseded by #13 — kept the deterministic half only, dropped the AI-learning half.** | — |
 | 9 | **EC2, not EKS/ECS**, for the demo deployment. | Reconfirmed from earlier this session — single-instance, 2-day build; no multi-tenant bin-packing need yet. One team doc used ECS; not adopted, to keep setup surface minimal. |
-| 10 | **Vector store: Amazon S3 Vectors**, not OpenSearch Serverless. | Reconfirmed from earlier this session; two of four team docs independently converged on the same choice. |
+| 10 | ~~Vector store: Amazon S3 Vectors, not OpenSearch Serverless.~~ **Moot — superseded by #11; there is no vector store in the MVP at all.** | — |
+| 11 | **No Knowledge Base, no vector store.** Guideline text and a short, curated CHT-conventions primer are stuffed directly into the Drafting and Change Planner prompts, with caching. | A full RAG pipeline is sized for "search across many documents" — a problem that doesn't exist at this scope (one guideline, one pathway). Prompt-stuffing gives the same grounding benefit with no ingestion pipeline, no embeddings, no vector-store cost floor, and no risk of retrieval missing the one passage that matters. A real Knowledge Base is a Phase 2 concern per Medic's own vision doc, not an MVP one. See [[architecture-decisions]] ADR-011. |
+| 12 | **Cross-Check Agent cut from the pipeline entirely**, not deferred. | Doubles the cost of every drafting call, forever, to catch disagreements that deterministic logic checks, golden cases, and an actual clinician's review already substantially cover. If wanted later, build it as a manual "re-draft and diff" button a clinician presses on a specific change, never an automatic pipeline step. See ADR-012. |
+| 13 | **History Check is deterministic code, not an agent.** Only the exact-fingerprint-match layer survives (a DynamoDB hash lookup, folded into Logic Checks); the AI-semantic-similarity layer is dropped. | The part that mattered — never let IT silently re-approve a rule a clinician already rejected — needs no LLM. The speculative half (semantic summarization of "similar but not identical" past decisions) isn't worth the recurring cost at Medic's likely change volume. See ADR-013. |
 
 ---
 
@@ -32,7 +36,7 @@ A clinical protocol can be updated in days; translating that update into CHT's a
 
 ## 2. Solution Summary
 
-AI drafts and flags. Code builds and tests. Humans approve twice. A program officer uploads a public guideline (or describes a change in plain language); Bedrock-backed agents draft the pathway's logic, citing every rule to its source passage and grounding it against a Knowledge Base; deterministic code checks it (completeness, exclusivity, reachability, golden cases); a clinician approves the exact version; deterministic code — never a model — compiles it into real CHT files; a fresh sandboxed build proves it with synthetic patients; IT approves the diff and test report; a separate deployer step uploads it. CHW phones get it on their next sync, running standard, offline, non-AI configuration throughout.
+AI drafts and flags. Code builds and tests. Humans approve twice. A program officer uploads a public guideline (or describes a change in plain language); Bedrock-backed agents draft the pathway's logic, citing every rule to its source passage and grounding it against the guideline text and a curated CHT-conventions primer, both stuffed directly into the prompt; deterministic code checks it (completeness, exclusivity, reachability, golden cases); a clinician approves the exact version; deterministic code — never a model — compiles it into real CHT files; a fresh sandboxed build proves it with synthetic patients; IT approves the diff and test report; a separate deployer step uploads it. CHW phones get it on their next sync, running standard, offline, non-AI configuration throughout.
 
 ## 3. Non-Negotiable Design Rules (Medic's, unchanged)
 
@@ -73,20 +77,21 @@ AI drafts and flags. Code builds and tests. Humans approve twice. A program offi
                     │   (orchestrator, fixed order)  │    at both approval gates
                     └───────────────┬─────────────┘
           calls each state's worker │ (internal API on the services EC2 instance)
-       ┌────────────┬───────────────┼───────────────┬────────────────┐
-       ▼            ▼               ▼               ▼                ▼
-  ┌─────────┐ ┌───────────┐  ┌────────────┐  ┌─────────────┐  ┌─────────────┐
-  │ Intake   │ │ Drafting / │  │ Cross-check │  │ Deterministic│  │ Change       │
-  │ Agent    │ │ Clinical    │  │ Agent       │  │ logic checks │  │ Planner      │
-  │ (EC2)    │ │ Review Agent│  │ (EC2, Should│  │ (code, EC2)  │  │ Agent        │
-  │          │ │ (EC2)       │  │ -Have)      │  │              │  │ (EC2, edits) │
-  └────┬─────┘ └─────┬──────┘  └──────┬─────┘  └──────┬───────┘  └──────┬──────┘
-       └─────────────┴────────────────┴───────────────┴─────────────────┘
-                    all reach tools only through AgentCore Gateway (Policy/Cedar enforced inside)
+       ┌────────────┬───────────────┼────────────────┐
+       ▼            ▼               ▼                ▼
+  ┌─────────┐ ┌───────────┐  ┌─────────────┐  ┌─────────────┐
+  │ Intake   │ │ Drafting / │  │ Deterministic│  │ Change       │
+  │ Agent    │ │ Clinical    │  │ logic checks │  │ Planner      │
+  │ (EC2, one│ │ Review Agent│  │ (code, EC2,  │  │ Agent        │
+  │ call, no │ │ (EC2)       │  │ incl. history│  │ (EC2, edits, │
+  │ tools)   │ │             │  │ fingerprint) │  │ one call)    │
+  └────┬─────┘ └─────┬──────┘  └──────┬───────┘  └──────┬──────┘
+       └─────────────┴────────────────┴─────────────────┘
+          both agents' prompts include the guideline text / CHT-conventions
+          primer directly (cached) — no Knowledge Base, no vector store
                                     │
                           ┌─────────▼──────────┐
-                          │ Bedrock Knowledge   │   Bedrock + Guardrails
-                          │ Base (S3 Vectors)   │◄──(screens every model call)
+                          │   Bedrock + Guardrails │ (screens every model call)
                           └─────────────────────┘
                                     │
                       ⏸ CONTENT APPROVAL (task token) ⏸
@@ -102,9 +107,6 @@ AI drafts and flags. Code builds and tests. Humans approve twice. A program offi
                     │ cht-conf-test-harness          │
                     └───────────────┬─────────────┘
                                     ▼
-                    ┌─────────────────────────────┐
-                    │ History Check (Should-Have)    │  advisory flags only, never blocks
-                    └───────────────┬─────────────┘
                       ⏸ DEPLOY APPROVAL (task token) ⏸
                                     │ approved
                                     ▼
@@ -116,70 +118,67 @@ AI drafts and flags. Code builds and tests. Humans approve twice. A program offi
                 CHW phones sync standard, offline CHT config — no AI on the device
 ```
 
-All compute — the UI/API, the orchestrator's workers, the agents, the deterministic tools, the build/test container, and the CHT test instance — runs on EC2. Managed AWS is used only for non-compute bookkeeping: Step Functions (approval waits), Bedrock (model calls + Guardrails + Knowledge Base), S3, DynamoDB, Secrets Manager, CloudWatch.
+All compute — the UI/API, the orchestrator's workers, the agents, the deterministic tools, the build/test container, and the CHT test instance — runs on EC2. Managed AWS is used only for non-compute bookkeeping: Step Functions (approval waits), Bedrock (model calls + Guardrails), S3, DynamoDB, Secrets Manager, CloudWatch.
 
 ## 6. Pipeline (Step Functions State Machine)
 
 | # | State | Worker | Who | What happens | Gate? |
 |---|---|---|---|---|---|
-| 1 | Intake | Intake Agent | AI | Turns the request (guideline upload, pathway pick, or plain-language edit) into a structured spec; stores it in S3 + DynamoDB | Schema check |
-| 2 | Draft | Drafting / Clinical Review Agent | AI | Drafts the logic snapshot from the spec + Knowledge Base; cites guideline passages; flags gaps/ambiguities | Flags only |
-| 3 | Cross-check *(Should-Have)* | Cross-Check Agent | AI | Independently re-derives the logic using a different model family than the draft; disagreements flagged | Flags only |
-| 4 | Logic checks | Deterministic validators | Code | Completeness, exclusivity, reachability, catch-all rows, ~12 golden cases | Yes |
-| 5 | **Content approval** | Review UI: clinician / program reviewer | Human | Approve, or reject with notes. Binds to one `snapshotHash` | **Yes** |
-| 6 | Compile | Deterministic compiler | Code | Approved snapshot → XLSForm + `tasks.js` (+ properties/translations as needed) | Hard gate: must build |
-| 7 | Build + test | One-off EC2 container | Code | Fresh, no-network, non-root container: `cht-conf` build, then synthetic patients via `cht-conf-test-harness` | **Yes** |
-| 8 | History check *(Should-Have)* | History Check Agent + code | AI + Code | Compares the change against past approved/rejected decisions; produces advisory flags for IT | Advisory; flags must be acknowledged, never auto-block |
-| 9 | **Deploy approval** | Review UI: IT lead | Human | Reviews diff, test report, and history flags; acknowledges each flag | **Yes** |
-| 10 | Deploy | Separate deployer step/role | Code | `cht-conf` uploads to the CHT test instance; verifies the instance now serves the built app settings | — |
+| 1 | Intake | Intake Agent | AI (single call, no tools) | Turns the request (guideline upload, pathway pick, or plain-language edit) into a structured spec; stores it in S3 + DynamoDB | Schema check |
+| 2 | Draft | Drafting / Clinical Review Agent | AI | Drafts the logic snapshot from the spec, with the guideline text given directly in the prompt; cites guideline passages; flags gaps/ambiguities | Flags only |
+| 3 | Logic checks | Deterministic validators | Code | Completeness, exclusivity, reachability, catch-all rows, ~12 golden cases, **and** a fingerprint check against past rejected rules for this pathway (§9) | Yes |
+| 4 | **Content approval** | Review UI: clinician / program reviewer | Human | Approve, or reject with notes. Binds to one `snapshotHash`; sees any fingerprint-match flag from step 3 | **Yes** |
+| 5 | Compile | Deterministic compiler | Code | Approved snapshot → XLSForm + `tasks.js` (+ properties/translations as needed) | Hard gate: must build |
+| 6 | Build + test | One-off EC2 container | Code | Fresh, no-network, non-root container: `cht-conf` build, then synthetic patients via `cht-conf-test-harness` | **Yes** |
+| 7 | **Deploy approval** | Review UI: IT lead | Human | Reviews the diff and test report | **Yes** |
+| 8 | Deploy | Separate deployer step/role | Code | `cht-conf` uploads to the CHT test instance; verifies the instance now serves the built app settings | — |
 | — | Sync | CHT (built-in) | — | CHW phones download the update on next connect | — |
 
 **Loops:**
 - *Schema-repair loop:* a malformed agent output is retried once on the same model, then once more escalating to a stronger model; two failures in a row kill the draft and surface the error to a human — never silently guessed.
-- *Reject loop:* a clinician rejection (or a plain-language edit) creates a **new snapshot** and re-enters at state 4 (Logic checks) — never back at the Drafting agent to be re-guessed. AI drafts and hand edits always share the same checks (design rule 3).
+- *Reject loop:* a clinician rejection (or a plain-language edit) creates a **new snapshot** and re-enters at state 3 (Logic checks) — never back at the Drafting agent to be re-guessed. AI drafts and hand edits always share the same checks (design rule 3).
 - *Build-failure split (Decisions Log #7):* if the failure means the approved logic itself must change, a new `snapshotHash` is created and content approval runs again. If it's a compiler or infrastructure bug with the logic unchanged, the same container rebuilds against the same hash and the existing content approval remains valid — no need to re-bother the clinician for a tooling retry.
 
-Every human decision (states 5 and 9) is written to the append-only decision log by a Step Functions step — **never by an agent**.
+Every human decision (states 4 and 7) is written to the append-only decision log by a Step Functions step — **never by an agent**.
 
 ## 7. Agent Roster
 
+Two real agents. Everything else that touches clinical meaning is deterministic code. (See [[architecture-decisions]] ADR-010 through ADR-012 for why the roster shrank from five to two.)
+
 | Agent | Must/Should | Purpose | Model | Allowed Gateway tools | Output schema | Explicitly denied |
 |---|---|---|---|---|---|---|
-| Intake Agent | Must | Turn a request into a structured spec | Haiku-tier | `kb.search(guideline)`, spec-store write (idempotent draft only) | `StructuredSpec` | Compiler, uploader, approvals, KB/memory writes |
-| Drafting / Clinical Review Agent | Must | Draft the logic snapshot with citations and flags | Haiku-tier, escalate to Sonnet-tier after 2 schema failures | `kb.search(guideline)`, `get-logic`, `validate-logic` | `LogicModel` + citations + flags | Compiler, uploader, approvals, config files, memory writes |
-| Cross-Check Agent | Should-Have (first cut if day 1 runs long) | Independently re-derive the logic | Sonnet-tier, **always the opposite model family from whichever produced the current draft** (Decisions Log #6) | `kb.search(guideline)` | `LogicModel` (2nd opinion) | Same as above |
-| Change Planner Agent | Must (for the edit journey) | Propose a structured change plan from a plain-language edit request | Haiku-tier | `kb.search(cht-docs, reference-config)`, `get-logic`, `diff-logic` | `ChangePlan` | Writing XLSForm/`tasks.js` directly, uploader, approvals, memory writes |
-| History Check Agent | Should-Have (second cut if day 1 runs long) | Flag similarities to past decisions for IT | Haiku-tier | Decision-log read, decision-memory read | `flags[]`, advisory only | Writing/editing decisions or memory, approvals, uploader, blocking a run |
+| Intake Agent | Must | Turn a request into a structured spec — **one non-looping Bedrock call**, no tool use | Haiku-tier | Spec-store write (idempotent draft only) | `StructuredSpec` | Everything else: compiler, uploader, approvals, retrieval, memory writes |
+| Drafting / Clinical Review Agent | Must | Draft the logic snapshot with citations and flags; guideline text given directly in the prompt (cached), not retrieved | Haiku-tier, escalate to Sonnet-tier after 2 schema failures | None (prompt-stuffed guideline, no retrieval tool) | `LogicModel` + citations + flags | Compiler, uploader, approvals, config files, memory writes |
+| Change Planner Agent | Must (for the edit journey) | Propose a structured change plan from a plain-language edit request; CHT-conventions primer given directly in the prompt | Haiku-tier | Baseline-logic fetch, proposal-store write (both deterministic, not model-invoked) | `ChangePlan` | Writing XLSForm/`tasks.js` directly, uploader, approvals, memory writes |
 
 **Never available to any agent, enforced two independent ways** (not registered on the agent-facing Gateway **and** explicitly denied by Cedar Policy `default: deny`, per the Open-path team doc's pattern): `approve-content`, `approve-deploy`, `deploy`, `verify-deploy`, `apply-change-plan`, `compile-config`, `cht-conf-build`, `run-synthetic-tests`, `write-xlsform`, `write-tasksjs`. Denials log to AgentCore Observability.
 
-**Per-agent limits** (initial values to tune, not accuracy guarantees): at most 4 tool calls and 2 Bedrock turns per drafting attempt, with at most 1 schema-repair turn, before the attempt fails to a human with the error.
+**Per-agent limits:** Intake and Change Planner need exactly one Bedrock call on the happy path, plus up to 2 schema-repair attempts. Drafting (not covered by this doc's code, built separately) should follow the same bound unless its guideline-reading step genuinely needs more.
 
-## 8. Knowledge Base Architecture
+**Note for whoever builds the Drafting Agent:** this roster assumes it also stuffs the guideline text directly into its prompt (with caching) rather than calling a Knowledge Base retrieval tool — the KB was cut project-wide (ADR-011). Confirm this matches what's actually being built.
 
-A Bedrock Knowledge Base over a private, versioned, encrypted S3 bucket (`kb-source`), one prefix per source, embedded with Titan Text Embeddings V2, indexed in **Amazon S3 Vectors** (Decisions Log #10).
+## 8. Grounding Strategy: Prompt-Stuffed, No Vector Store
 
-| Source | S3 prefix | Chunking | Metadata per chunk | Used by |
-|---|---|---|---|---|
-| Clinical guideline | `guideline/` | By section; tables/decision charts kept whole | `guideline`, `version`, `section`, `page`, `tableId` | Drafting, Cross-Check agents |
-| CHT documentation (only the pages needed — XLSForm, tasks, `cht-conf`, reference app) | `cht-docs/` | By Markdown heading | `path`, `topic` | Change Planner agent |
-| Reference configs (`cht-core/config/default`) | `reference-config/` | One chunk per form, one per task | `file`, `workflow` | Change Planner agent |
+Both agents that need to ground their output in reference material (Drafting against the guideline; Change Planner against CHT conventions) get that material as plain text, directly in their prompt, with caching to control token cost — not through a Bedrock Knowledge Base or any vector store.
 
-**Access rule:** agents never call the Knowledge Base directly — only through one shared **retrieval service** (its own container, called via AgentCore Gateway), which applies the source filter, returns chunks with citations, and logs every query to CloudWatch, stored with the snapshot. A rule drafted with no citation is flagged, never silently accepted. The retrieval service is the only enforcement point for "every answer carries a citation" — it cannot be bypassed.
+| What's grounded | How | Used by |
+|---|---|---|
+| Clinical guideline text | Full text of the one guideline for the one pathway being built, included directly in the prompt | Drafting Agent |
+| CHT conventions | A short, team-curated primer (a few paragraphs, hand-picked from `medic/cht-docs` and `cht-core/config/default` for the pathway in hand) | Change Planner Agent |
 
-**Boundary:** the Knowledge Base informs agents; it never decides. Logic checks, golden cases, and synthetic patients remain the only gates. It holds documents only — never patient data, credentials, golden cases, or anything from the `cht-docs` MCP server (which runs outside the AWS account).
+**Why this, not a Knowledge Base (ADR-011):** at this scope — one guideline, one pathway — a vector-search pipeline solves a problem that doesn't exist yet ("find the relevant document among many"). Putting the whole guideline in context is both cheaper (no embeddings, no vector store, no ingestion pipeline) and a *stronger* safety guarantee than top-k retrieval, since there's no risk of the retrieval step missing the one passage that matters. A real Knowledge Base earns its place once Medic has many guidelines that genuinely don't fit in context together — that's Phase 2 per their own vision doc, not the MVP.
 
-## 9. Decision Memory / History Check (Should-Have)
+**What this does NOT change:** every drafted rule must still cite its source passage (design rule 7/5), and an uncited rule is still flagged, never silently accepted. The citation discipline is a prompt/schema requirement on the agent's output, independent of whether the source text arrived via retrieval or directly in the prompt.
 
-Three stores, three distinct jobs, no duplication — adopted directly from the most detailed team doc's design, since it maps cleanly onto the audit/reversibility rules already required:
+## 9. History Check (Deterministic, Not an Agent)
 
-| Store | Holds | Writer | Reader | Role |
-|---|---|---|---|---|
-| Bedrock Knowledge Base | Guideline, CHT docs, reference configs | Ingest container (code) | Agents, via retrieval service | Documents with citations |
-| **AgentCore Memory** (long-term) | Plain-language summaries of past approvals/rejections, namespaced per pathway | Memory writer (code, not an agent) | Drafting, Cross-Check, Change Planner, History Check agents | Learning from precedent |
-| DynamoDB + S3 | Exact decision records, rule fingerprints, approvals | Step Functions (code) | History Check (exact match), review UI, auditors | Source of truth and audit |
+Folded into Logic Checks (§6, state 3) as a plain function, not a separate service:
 
-Agents **read** memory; only code writes it, so a model can never alter what it learns from. An exact fingerprint match to a *rejected* rule surfaces as a high-severity flag at the top of IT's deploy-approval screen; flags are always advisory and must be acknowledged, never auto-blocking.
+- Every rule in a new snapshot is normalized and fingerprinted (hash of its structural condition + action).
+- The fingerprint is compared against a DynamoDB index of fingerprints from past **rejected** decisions for the same pathway.
+- An exact match surfaces as a high-severity flag on the content-approval screen — advisory only, never auto-blocking; the clinician still decides.
+
+No LLM, no Knowledge Base, no AgentCore Memory. This replaces the earlier three-store "decision memory" design (Decisions Log #8/#13): the part that mattered — don't let a rejected rule quietly resurface — needed a hash lookup, not semantic similarity search. If Medic later wants "flag rules *similar to* (not identical to) a past rejection," that's a genuine LLM use case worth revisiting once there's a large enough decision history for it to matter — not before.
 
 ## 10. Logic Model
 
@@ -256,19 +255,17 @@ This split means the container that actually runs arbitrary build/test tooling n
 | Component | Service | Notes |
 |---|---|---|
 | Compute | EC2 (Ubuntu, x86_64) | t3.xlarge for services/agents/orchestrator workers, t3.large for the CHT test instance |
-| AI agents | Containers on the services EC2 instance (framework: Strands Agents or equivalent) | One container per agent; **not** AgentCore Runtime (Decisions Log #3) |
-| Agent tools | AgentCore Gateway | Exposes KB retrieval and the spec store as MCP tools; Cedar policy in `ENFORCE` mode |
+| AI agents | Containers on the services EC2 instance (framework: Strands Agents or equivalent) | One container per agent; **not** AgentCore Runtime (Decisions Log #3). Two agents, not five (ADR-010/012/013). |
+| Agent tools | AgentCore Gateway | Exposes the spec-store and proposal-store writes as MCP tools; Cedar policy in `ENFORCE` mode. No KB retrieval tool (ADR-011). |
 | Agent permissions | AgentCore Policy (Cedar) | Enforces each agent's allowed-tool list; deny-by-default |
 | Agent identity | AgentCore Identity | Per-agent-container workload identity for calling Gateway; no long-lived keys |
-| Agent memory | AgentCore Memory (long-term) | Decision-history learning only (§9); never an approval authority |
-| Agent tracing | AgentCore Observability (OpenTelemetry → CloudWatch) | Every agent step, tool call, and token count traced per change |
+| Agent tracing | AgentCore Observability (OpenTelemetry → CloudWatch) | Every agent step and token count traced per change |
 | Orchestrator | AWS Step Functions (standard workflow) | Fixed state machine; task tokens for both approval waits; visual execution graph for the demo |
-| Models | Amazon Bedrock, `us.` inference profiles | Smallest model per job behind one interface (Decisions Log #6; §7 table) |
+| Models | Amazon Bedrock, `us.` inference profiles | Smallest model per job behind one interface |
 | Input screening | Bedrock Guardrails | Screens every drafting input for personal data before it reaches a model |
-| Knowledge Base | Bedrock Knowledge Base + Titan Text Embeddings V2 + **S3 Vectors** | §8 |
-| Guideline reading | Claude on Bedrock (direct PDF input) or Textract | Pick by measured accuracy during setup |
-| Pipeline state | DynamoDB: `Changes`, `Approvals`, `Audit`, `Tokens` tables | PK `changeId`; see §10–11 for key design |
-| Storage | S3, private, versioned, encrypted (SSE-KMS) | `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/` prefixes; separate `kb-source` bucket for the KB |
+| Guideline reading | Claude on Bedrock (direct PDF input) or Textract | Pick by measured accuracy during setup; output goes straight into the prompt (§8), not into a KB |
+| Pipeline state | DynamoDB: `Changes`, `Approvals`, `Audit`, `Tokens` tables | PK `changeId`; see §10–11 for key design. Also holds the History Check fingerprint index (§9). |
+| Storage | S3, private, versioned, encrypted (SSE-KMS) | `docs/`, `snapshots/`, `builds/`, `reports/`, `proposals/` prefixes |
 | Secrets | Secrets Manager | CHT test instance login — readable only by the deployer role, only post-approval |
 | Access | Systems Manager Session Manager | No open SSH/admin ports; IMDSv2 required, hop limit 2 |
 | Logs/traces | CloudWatch | Every model call and container log; gives cost-per-run |
@@ -276,12 +273,12 @@ This split means the container that actually runs arbitrary build/test tooling n
 | Infrastructure as code | Terraform (Medic's standard) or CDK in TypeScript | One deploy command, one teardown command |
 | Network | VPC, private subnets for compute, public subnet only for an optional ALB | Gateway→internal-tools connectivity should be smoke-tested on day 1 (it is not automatic) |
 
-**Not used:** AgentCore Runtime, Lambda for application logic, Fargate, SageMaker, RDS/Aurora, Kinesis/MSK, model endpoints outside Bedrock, public S3 buckets, open SSH/admin ports.
+**Not used:** AgentCore Runtime, AgentCore Memory, Bedrock Knowledge Bases, any vector store, Lambda for application logic, Fargate, SageMaker, RDS/Aurora, Kinesis/MSK, model endpoints outside Bedrock, public S3 buckets, open SSH/admin ports.
 
 ## 15. Security and Data Handling
 
 - Synthetic data and public guidelines only; no real patient data or real CHT credentials anywhere in a prompt or trace.
-- Bedrock Guardrails screen every drafting input; the Knowledge Base ingestion path is screened too, not just live chat (a guideline PDF is a second entry point for personal data, not just chat text).
+- Bedrock Guardrails screen every drafting input, including extracted guideline text before it's placed in a prompt — not just live chat.
 - Least-privilege IAM role per component; no long-lived keys. Each agent container gets its own workload identity (AgentCore Identity) rather than sharing the instance role.
 - Build container: non-root, no git write credentials, no Docker socket, only `SYS_ADMIN`, metadata endpoint blocked, **no network**.
 - Deployer role: the only component with Secrets Manager read access to the CHT login, gated on deploy approval having been recorded.
@@ -296,7 +293,7 @@ All gates are deterministic; a model never judges a test.
 | Check | When | Proves |
 |---|---|---|
 | Schema validation | Every model output | Shape is right before use |
-| Logic checks | Before content approval | No missing branches, no overlaps, every question reachable, catch-all present |
+| Logic checks (incl. history fingerprint, §9) | Before content approval | No missing branches, no overlaps, every question reachable, catch-all present, no exact repeat of a rejected rule |
 | Golden cases (~12) | Before content approval | Logic matches the guideline's own worked examples; written by the team, confirmed by Medic |
 | `cht-conf` build | After compile | Valid CHT configuration — a form that doesn't convert never ships |
 | Synthetic patients | After build | 100% branch coverage; built form produces the outcome the approved logic predicts |
@@ -307,14 +304,14 @@ Expected outcomes are always computed from the approved snapshot — never by a 
 ## 17. Cost Plan ($500 Sandbox)
 
 - AWS Budgets alerts at $250 and $400.
-- Smallest model per job (§7); prompt caching for repeated guideline text within a session.
+- Smallest model per job (§7); prompt caching for the guideline text and conventions primer, which are the largest repeated inputs.
 - Coding assistants on Bedrock count against the budget — use deliberately.
 - Agents share the services EC2 instance, so they add no hosting cost beyond its running hours.
-- AgentCore Gateway/Policy/Memory/Observability bill per call/record/telemetry volume — tiny at hackathon scale, but report per-run in the README anyway, for Medic's handover.
-- S3 Vectors has no provisioned-capacity floor, unlike OpenSearch Serverless — confirm `us-west-2` support on day 1; fall back to OpenSearch Serverless (with explicit teardown) only if unavailable.
+- No Knowledge Base, no vector store, no embeddings — that entire cost category is gone (ADR-011).
+- AgentCore Gateway/Policy/Observability bill per call/telemetry volume — tiny at hackathon scale, but report per-run in the README anyway, for Medic's handover.
 - Stop EC2 instances outside build hours. Tag every resource with the project tag.
 - Record token use per pathway run; report cost per run in the README.
-- One teardown command removes everything, including the vector store and any retained volumes.
+- One teardown command removes everything, including any retained volumes.
 
 ## 18. Well-Architected Mapping
 
@@ -325,20 +322,20 @@ Expected outcomes are always computed from the approved snapshot — never by a 
 | Operational excellence | Deploy from README into a fresh account; one change traced request → deploy; agent roles/handoffs documented (§7) |
 | Security | Access model, Guardrails, build/deploy credential separation (§13), approvals bound to exact versions |
 | Reliability | Restart during an approval wait (task tokens survive it); build-failure split (§6, #7) avoids unnecessary re-approval; rollback to a prior snapshot |
-| Performance efficiency | Timed run, guideline to approved tested build in minutes; smallest model per job; fixed pipeline, no open-ended agent loops |
-| Cost optimization | Spend to date, cost per run, S3 Vectors over a provisioned vector store, teardown command |
+| Performance efficiency | Timed run, guideline to approved tested build in minutes; smallest model per job; two agents, one Bedrock call each on the happy path, no open-ended loops |
+| Cost optimization | Spend to date, cost per run, **zero vector-store/KB infrastructure**, teardown command |
 | Sustainability | Compute only while building/testing; no model training; CHW phones stay AI-free |
 
 ### Agentic AI Lens highlights (adopted from one team doc's review against the AWS Well-Architected Agentic AI Lens)
 
 | Practice | How this design applies it |
 |---|---|
-| Define agent roles, success criteria, handoffs | §7's table — each agent has one job, one output schema, and hands off only through Step Functions |
+| Define agent roles, success criteria, handoffs | §7's table — two agents, each with one job, one output schema, handing off only through Step Functions |
 | Bounded autonomy / tool access | AgentCore Policy (Cedar) denies every approve/deploy/write tool, enforced two independent ways (§7) |
 | Human-in-the-loop governance | Two approvals via Step Functions task tokens; rejection notes feed back as a new snapshot (never re-guessed by the AI) |
 | Testing and evaluation frameworks | Golden cases, logic checks, synthetic patients are the only gates; LLM-as-judge is explicitly excluded, per Medic's stricter rule 6 |
 | Arbiter patterns, fallbacks | Step Functions is the arbiter: retries bounded, then routes to a human with the error, never a guess |
-| Control reasoning-loop costs | No free-running loops; bounded tool calls/turns per agent attempt (§7) |
+| Control reasoning-loop costs | No tool-use loops at all anymore (ADR-010/011) — each agent is one Bedrock call plus bounded schema repair |
 | Right-size models, attribute cost | Model tier per agent (§7); tag every resource/call by `agent`, `tenant`, `runId` for per-agent cost reporting |
 
 ## 19. Timeline and Cut List
@@ -346,19 +343,39 @@ Expected outcomes are always computed from the approved snapshot — never by a 
 | When | Focus |
 |---|---|
 | Day 1 AM | CHT setup (per Medic's setup path); pick pathway and guideline; lock the logic-model JSON schema |
-| Day 1 PM | Intake + Drafting agents producing a schema-valid `LogicModel`; Knowledge Base ingestion (guideline + CHT docs); logic checks; write golden cases |
+| Day 1 PM | Intake + Drafting agents producing a schema-valid `LogicModel`; guideline text prompt-stuffed into Drafting (no ingestion step needed); logic checks; write golden cases |
 | Day 2 AM | Step Functions state machine wired end to end; content approval UI; compiler; build/test container (no-network, destroyed-per-run) |
 | Day 2 PM | Deploy approval UI; separate deployer step/role; change lifecycle hash-binding and build-failure split (§6/#7/§11); full end-to-end timed run; README, cost tracking |
-| Day 2 evening | Cross-check agent and History check agent, **only if on schedule** |
 | Day 3 AM | Rehearse; no new features |
 
-**Cut list, in order, if behind:** History Check agent → Cross-Check agent → deploy upload to live CHT test instance → chat-based approver UX → UI polish. **Never cut:** logic checks, the two approvals, or synthetic-patient testing.
+**Cut list, in order, if behind:** deploy upload to live CHT test instance → chat-based approver UX → UI polish. **Never cut:** logic checks, the two approvals, or synthetic-patient testing. (Cross-Check and the AI half of History Check are no longer on this list — they're cut from scope entirely, not deferred; see Decisions Log #12/#13.)
 
 ## 20. Open Items
 
 - [ ] Final guideline + pathway (child cough and fast breathing is the working example throughout this doc, but not yet locked in by the team).
-- [ ] Confirm `us-west-2` S3 Vectors support for Bedrock Knowledge Bases on day 1; have the OpenSearch Serverless fallback ready.
 - [ ] Smoke-test AgentCore Gateway → internal-tools connectivity on day 1 — it is not automatic and was flagged as unverified in more than one source doc.
 - [ ] Decide the approver UX: decision table, flowchart, chat, or a combination (Open path leaves this to the team).
 - [ ] Write the ~12 golden cases once the pathway is locked; get Medic's confirmation in the clinician role.
 - [ ] IAM role design per component (one role per agent via AgentCore Identity; separate orchestrator, det-services, deployer, and UI roles) — draft Terraform/CDK modules against §14's service table.
+- [ ] Curate the real CHT-conventions primer content for the chosen pathway (the Change Planner Agent's `primer.ts` currently ships placeholder text — see its README).
+- [ ] Confirm with whoever builds the Drafting Agent that it prompt-stuffs the guideline rather than calling a Knowledge Base tool (§7 note).
+
+## 21. Production Cost Note
+
+Everything above targets the 2-day hackathon demo, where EC2-always-on is both required by Medic's own rules and cheap in absolute terms over two days. That is **not** the same as the right shape for a real, ongoing deployment, and it's worth saying so plainly rather than letting the hackathon's constraint quietly become a permanent architecture decision:
+
+- The genuinely serverless pieces (Bedrock, Step Functions, DynamoDB on-demand, Lambda glue) scale cost *with* usage, which is correct — more changes processed means more value delivered, at proportionally more cost, with no surprise floor.
+- The EC2-hosted pieces (services instance, build/test instance, CHT test instance) carry a fixed cost whether or not anyone submits a change that month, which is the wrong shape for what's almost certainly a low-volume, bursty workload. It gets worse per additional ministry that each gets its own isolated stack.
+- If this becomes a real deployment conversation with Medic, the honest recommendation is to move the agent/build tier to scale-to-zero compute — Fargate, or notably AgentCore Runtime itself, which scales to zero between invocations and would be worth reconsidering for production even though it was deliberately skipped for this hackathon build (Decisions Log #3).
+
+No action needed for the demo. Flagging this now so it's on record before anyone mistakes "what we built in two days under Medic's hackathon rules" for "the right production architecture."
+
+## 22. Known Limitations and Non-Technical Risks
+
+Named explicitly rather than implied as solved:
+
+- **Golden-case authoring doesn't scale for free.** Writing ~12 golden cases per pathway needs real clinician time — a scarcer resource than AWS dollars for a nonprofit. More pathways means more of this scarce time spent, mirroring a smaller version of the exact bottleneck this project exists to remove.
+- **Guideline-version drift compounds.** When a guideline updates, every pathway drafted against the old version may need re-drafting and re-approval. That's a recurring clinician-time cost that grows with the library of approved pathways, not a one-time build cost.
+- **The bottleneck may relocate, not disappear.** This removes the *developer* bottleneck. If clinician availability doesn't grow to match demand for changes, the new bottleneck is "which clinician has time to review an AI draft today" — a people problem, not a technical one.
+- **Adoption risk.** A technically safe system still fails if ministry staff don't trust an AI-drafted clinical rule enough to use the no-code path instead of asking a developer out of habit.
+- **Handover sustainability.** Medic's own small team has to operate and debug whatever gets handed off after the hackathon. Every additional agent or managed service is something they have to maintain with less context than the team that built it — a second, non-financial argument for the simplification in this revision, independent of cost.
