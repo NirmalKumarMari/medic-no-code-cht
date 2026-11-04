@@ -1,6 +1,8 @@
 import type { LogicModel } from '../types/logic-model';
-import { ACTION_LABELS, conditionsOf, isOtherwise } from '../types/logic-model';
-import { describeCondition, describeFollowUp } from '../data/describe';
+import { actionLabel, isOtherwise } from '../types/logic-model';
+import { describeFollowUp } from '../data/describe';
+import Citation from './Citation';
+import ExprView from './ExprView';
 
 // Table view of the same logic. Some clinicians read decision tables faster
 // than diagrams; both views read the one LogicModel.
@@ -16,7 +18,7 @@ export default function DecisionTable({ model }: { model: LogicModel }) {
         <thead>
           <tr>
             <th scope="col">Order</th>
-            <th scope="col">When (all must be true)</th>
+            <th scope="col">When</th>
             <th scope="col">Then</th>
             <th scope="col">Follow-up task</th>
             <th scope="col">Guideline reference</th>
@@ -32,16 +34,14 @@ export default function DecisionTable({ model }: { model: LogicModel }) {
                   {otherwise ? (
                     'No rule above matched'
                   ) : (
-                    <ul className="table-conditions">
-                      {conditionsOf(rule).map((c, ci) => (
-                        <li key={ci}>{describeCondition(c, model.inputs)}</li>
-                      ))}
-                    </ul>
+                    <ExprView expr={rule.when} inputs={model.inputs} className="table-conditions" />
                   )}
                 </td>
-                <td>{ACTION_LABELS[rule.then.action]}</td>
+                <td>{actionLabel(rule.then.action) ?? <strong className="expr-invalid">Unknown action: {String(rule.then.action)}</strong>}</td>
                 <td>{rule.followUp ? describeFollowUp(rule.followUp) : 'None'}</td>
-                <td>{rule.source?.section ?? 'Not given'}</td>
+                <td>
+                  <Citation source={rule.source} />
+                </td>
               </tr>
             );
           })}

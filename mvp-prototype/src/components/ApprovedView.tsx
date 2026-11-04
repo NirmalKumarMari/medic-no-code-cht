@@ -1,4 +1,6 @@
+import { capitalise } from '../data/describe';
 import type { LogicModel } from '../types/logic-model';
+import { modelLabel } from '../types/logic-model';
 import DecisionTable from './DecisionTable';
 
 // Confirmation screen. Also shows, in plain words, what the full system would
@@ -26,7 +28,7 @@ export default function ApprovedView({ model, note, onStartOver }: Props) {
   return (
     <div>
       <div className="banner-ok">
-        Version {model.version} of <strong>{model.pathway}</strong> is approved.
+        {capitalise(modelLabel(model))} of <strong>{model.pathway.title}</strong> is approved.
         {note && <> Note: “{note}”</>}
       </div>
 

@@ -44,6 +44,7 @@ proxy, run `npm run dev:proxy` instead and open
 ```bash
 npm run build        # type-check and production build into dist/
 npm run preview      # serve the production build
+npm test             # test the checks (needs Node 22.15 or later, no install)
 ```
 
 ## Code map
@@ -53,7 +54,10 @@ npm run preview      # serve the production build
 | `src/types/logic-model.ts` | The logic model (design doc section 10) |
 | `src/types/draft.ts` | What the form edits |
 | `src/data/stubGenerator.ts` | Stubbed drafting step: form answers to logic model |
-| `src/data/checks.ts` | Deterministic logic checks |
+| `src/data/checks.ts` | Deterministic logic checks, run against every distinct case |
+| `src/data/evaluate.ts` | Evaluates rules and builds the grid of test cases |
+| `src/data/audit.ts` | Blocks approval of anything the screen cannot show faithfully |
+| `src/components/ExprView.tsx` | Shows a rule's condition, however deeply nested |
 | `src/data/validate.ts` | Form validation messages |
 | `src/data/drafts.ts` | Empty drafts and the example pathway |
 | `src/components/` | Screens and UI pieces |

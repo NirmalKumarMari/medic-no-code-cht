@@ -363,6 +363,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .notice-error { border-left-color: var(--mm-error-text); background: var(--mm-error-highlight); }
 
+.expr-group { margin: 2px 0; padding-left: 18px; list-style: disc; }
+.expr-invalid { color: var(--mm-error-text); }
+.citation-missing { color: var(--mm-error-text); font-weight: 600; }
+.citation-quote { display: block; margin-top: 4px; font-style: italic; }
+.snapshot-hash { margin-bottom: 12px; overflow-wrap: anywhere; }
+
 .banner-ok {
   margin-bottom: 20px;
   padding: 12px 16px;

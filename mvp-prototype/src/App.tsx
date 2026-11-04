@@ -6,6 +6,7 @@ import { runChecks } from './data/checks';
 import { generateLogicModel } from './data/stubGenerator';
 import type { Notice, RequirementsDraft } from './types/draft';
 import type { LogicModel } from './types/logic-model';
+import { modelLabel } from './types/logic-model';
 
 type Stage = 'requirements' | 'generating' | 'review' | 'approved';
 
@@ -58,7 +59,7 @@ export default function App() {
 
   function handleReject(note: string) {
     if (!model) return;
-    setNotice({ tone: 'error', title: `Version ${model.version} was rejected`, lines: [note] });
+    setNotice({ tone: 'error', title: `Rejected: ${modelLabel(model)}`, lines: [note] });
     setStage('requirements');
   }
 
@@ -67,7 +68,7 @@ export default function App() {
     const lines = checks
       .filter((c) => c.status === 'problem')
       .flatMap((c) => (c.details.length ? c.details : [c.summary]));
-    setNotice({ tone: 'error', title: `Fix the problems found in version ${model.version}`, lines });
+    setNotice({ tone: 'error', title: `Fix the problems found in ${modelLabel(model)}`, lines });
     setStage('requirements');
   }
 
@@ -118,7 +119,7 @@ export default function App() {
 
         <h2 ref={headingRef} tabIndex={-1}>
           {HEADINGS[stage]}
-          {stage === 'review' && model ? `: version ${model.version}` : ''}
+          {stage === 'review' && model ? `: ${modelLabel(model)}` : ''}
         </h2>
 
         {stage === 'requirements' && (

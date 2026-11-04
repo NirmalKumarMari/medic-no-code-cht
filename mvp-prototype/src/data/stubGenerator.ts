@@ -8,7 +8,7 @@
 import type { OutcomeDraft, RequirementsDraft } from '../types/draft';
 import type {
   FollowUp,
-  LogicCondition,
+  LeafCondition,
   LogicInput,
   LogicModel,
   LogicRule,
@@ -42,23 +42,26 @@ export function buildLogicModel(draft: RequirementsDraft, version: number): Logi
     for (let n = 2; usedIds.has(id); n += 1) id = `${base}_${n}`;
     usedIds.add(id);
     const input: LogicInput = { id, type: q.type, label: q.label.trim() };
-    if (q.type === 'select') input.choices = parseChoices(q.choices);
+    if (q.type === 'select_one') input.choices = parseChoices(q.choices);
     inputsByKey.set(q.key, input);
     return input;
   });
 
   const rules = draft.rules.map((r, i): LogicRule => {
-    const all = r.conditions.map((c): LogicCondition => {
+    const all = r.conditions.map((c): LeafCondition => {
       const input = inputsByKey.get(c.questionKey);
+      const id = input?.id ?? 'unknown';
       if (input && isNumberType(input.type)) {
-        return { input: input.id, op: c.op, value: Number(c.value) };
+        const value = Number(c.value);
+        if (c.op === 'gte') return { input: id, gte: value };
+        return c.op === 'lt' ? { input: id, lt: value } : { input: id, eq: value };
       }
-      return { input: input?.id ?? 'unknown', op: 'eq', value: c.value.trim() };
+      return { input: id, eq: c.value.trim() };
     });
     return {
       id: `r${i + 1}`,
       when: { all },
-      then: { action: r.action || 'home_care_advice' },
+      then: { action: r.action },
       ...followUpOf(r),
       ...(r.source.trim() ? { source: { section: r.source.trim() } } : {}),
     };
@@ -67,21 +70,23 @@ export function buildLogicModel(draft: RequirementsDraft, version: number): Logi
   rules.push({
     id: 'otherwise',
     when: { otherwise: true },
-    then: { action: draft.otherwise.action || 'home_care_advice' },
+    then: { action: draft.otherwise.action },
     ...followUpOf(draft.otherwise),
+    ...(draft.otherwiseSource.trim() ? { source: { section: draft.otherwiseSource.trim() } } : {}),
   });
 
   const guidelineVersion = draft.guidelineVersion.trim();
   return {
     snapshotId: `${slugify(draft.pathway)}-v${version}`,
     version,
-    pathway: draft.pathway.trim(),
+    pathway: { id: slugify(draft.pathway), title: draft.pathway.trim() },
     guideline: {
       name: draft.guidelineName.trim(),
       ...(guidelineVersion ? { version: guidelineVersion } : {}),
     },
     inputs,
     rules,
+    flags: [],
   };
 }
 

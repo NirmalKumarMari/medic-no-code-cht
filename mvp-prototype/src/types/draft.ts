@@ -7,7 +7,7 @@ export interface QuestionDraft {
   key: string;
   label: string;
   type: QuestionType;
-  /** Comma-separated. Only used when type is 'select'. */
+  /** Comma-separated. Only used when type is 'select_one'. */
   choices: string;
 }
 
@@ -39,6 +39,7 @@ export interface RequirementsDraft {
   rules: RuleDraft[];
   /** What happens when no rule matches. */
   otherwise: OutcomeDraft;
+  otherwiseSource: string;
 }
 
 /** A message shown at the top of the form when the user comes back to edit. */

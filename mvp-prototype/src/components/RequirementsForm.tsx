@@ -274,7 +274,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
                   onChange={(v) => updateQuestion(q.key, { type: v as QuestionType })}
                 />
               </div>
-              {q.type === 'select' && (
+              {q.type === 'select_one' && (
                 <TextField
                   id={`q-${q.key}-choices`}
                   label={
@@ -338,6 +338,17 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
           value={draft.otherwise}
           errorFor={errorFor}
           onChange={(patch) => setDraft((d) => ({ ...d, otherwise: { ...d.otherwise, ...patch } }))}
+        />
+        <TextField
+          id="otherwise-source"
+          label={
+            <>
+              Where is this in the guideline? <span className="optional">(optional)</span>
+            </>
+          }
+          hint="Section name or page. In the full system, the AI adds this from the guideline."
+          value={draft.otherwiseSource}
+          onChange={(v) => update({ otherwiseSource: v })}
         />
       </section>
 

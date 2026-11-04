@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import type { CheckResult } from '../data/checks';
+import { capitalise } from '../data/describe';
 import type { LogicModel } from '../types/logic-model';
+import { modelLabel } from '../types/logic-model';
 import ChecksPanel from './ChecksPanel';
 import DecisionTable from './DecisionTable';
+import FlagsPanel, { isOpenAmbiguity } from './FlagsPanel';
 import Flowchart from './Flowchart';
 import { TextAreaField } from './fields';
 
 // Review screen: automatic checks, the logic as a flowchart or table, and the
-// decision. Approval is blocked while a check reports a problem. Rejecting
+// decision. Approval is blocked while a check reports a problem or an ambiguity
+// is open. Rejecting
 // needs a note, which is shown on the form when the user goes back to edit.
 
 interface Props {
@@ -22,7 +26,11 @@ export default function ReviewPanel({ model, checks, onApprove, onReject, onFix 
   const [view, setView] = useState<'flow' | 'table'>('flow');
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState<string>();
-  const blocked = checks.some((c) => c.status === 'problem');
+  const hasProblems = checks.some((c) => c.status === 'problem');
+  const flags = model.flags ?? [];
+  const openAmbiguities = flags.filter(isOpenAmbiguity).length;
+  const blocked = hasProblems || openAmbiguities > 0;
+  const label = modelLabel(model);
 
   function reject() {
     if (!note.trim()) {
@@ -36,11 +44,16 @@ export default function ReviewPanel({ model, checks, onApprove, onReject, onFix 
   return (
     <div>
       <p className="lead">
-        Version {model.version} of <strong>{model.pathway}</strong>, based on {model.guideline.name}
-        {model.guideline.version ? ` (${model.guideline.version})` : ''}.
+        {capitalise(label)} of <strong>{model.pathway.title}</strong>
+        {model.guideline
+          ? `, based on ${model.guideline.name}${model.guideline.version ? ` (${model.guideline.version})` : ''}`
+          : ''}
+        .
       </p>
 
       <ChecksPanel results={checks} />
+
+      <FlagsPanel flags={flags} />
 
       <section className="card" aria-labelledby="logic-heading">
         <div className="card-head">
@@ -76,20 +89,29 @@ export default function ReviewPanel({ model, checks, onApprove, onReject, onFix 
             if (noteError && v.trim()) setNoteError(undefined);
           }}
         />
+        {model.snapshotHash && (
+          <p className="snapshot-hash">
+            You are deciding on exactly this snapshot: <code>{model.snapshotHash}</code>
+          </p>
+        )}
         {blocked && (
           <div className="notice notice-error">
             <p>
-              <strong>This version cannot be approved yet.</strong> Fix the problems found by the automatic checks
-              first.
+              <strong>This version cannot be approved yet.</strong>
+              {hasProblems && ' Fix the problems found by the automatic checks first.'}
+              {openAmbiguities > 0 &&
+                ` ${openAmbiguities} ${openAmbiguities === 1 ? 'ambiguity is' : 'ambiguities are'} still open and must be settled by a person.`}
             </p>
-            <button type="button" className="btn" onClick={onFix}>
-              Edit to fix the problems
-            </button>
+            {hasProblems && (
+              <button type="button" className="btn" onClick={onFix}>
+                Edit to fix the problems
+              </button>
+            )}
           </div>
         )}
         <div className="button-bar">
           <button type="button" className="btn" disabled={blocked} onClick={() => onApprove(note.trim())}>
-            Approve version {model.version}
+            Approve {label}
           </button>
           <button type="button" className="btn-danger" onClick={reject}>
             Reject and edit

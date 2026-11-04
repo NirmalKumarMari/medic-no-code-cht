@@ -1,6 +1,8 @@
 import type { LogicModel } from '../types/logic-model';
-import { ACTION_LABELS, conditionsOf, isOtherwise } from '../types/logic-model';
-import { describeCondition, describeFollowUp } from '../data/describe';
+import { actionLabel, isOtherwise } from '../types/logic-model';
+import { describeFollowUp } from '../data/describe';
+import Citation from './Citation';
+import ExprView from './ExprView';
 
 // Accessible flowchart built from HTML (not a canvas), so screen readers can
 // read it and it reflows on small screens. Each check has a "Yes" branch to
@@ -19,7 +21,7 @@ export default function Flowchart({ model }: { model: LogicModel }) {
           ↓
         </p>
       </div>
-      <ol className="flow-steps" aria-label={`Flowchart for ${model.pathway}`}>
+      <ol className="flow-steps" aria-label={`Flowchart for ${model.pathway.title}`}>
         {rules.map((rule, i) => {
           const otherwise = isOtherwise(rule);
           const next = i + 1 < rules.length - 1 ? `check ${i + 2}` : 'the "otherwise" outcome';
@@ -31,14 +33,7 @@ export default function Flowchart({ model }: { model: LogicModel }) {
                   {otherwise ? (
                     <p>None of the checks above matched</p>
                   ) : (
-                    <ul className="flow-conditions">
-                      {conditionsOf(rule).map((c, ci) => (
-                        <li key={ci}>
-                          {ci > 0 && <span className="flow-and">and </span>}
-                          {describeCondition(c, model.inputs)}
-                        </li>
-                      ))}
-                    </ul>
+                    <ExprView expr={rule.when} inputs={model.inputs} className="flow-conditions" showAnd />
                   )}
                 </div>
                 <div className="flow-arrow flow-arrow-yes" aria-hidden="true">
@@ -53,9 +48,15 @@ export default function Flowchart({ model }: { model: LogicModel }) {
                       Urgent
                     </span>
                   )}
-                  <strong>{ACTION_LABELS[rule.then.action]}</strong>
+                  {actionLabel(rule.then.action) ? (
+                    <strong>{actionLabel(rule.then.action)}</strong>
+                  ) : (
+                    <strong className="expr-invalid">Unknown action: {String(rule.then.action)}</strong>
+                  )}
                   {rule.followUp && <p>{describeFollowUp(rule.followUp)}</p>}
-                  {rule.source && <p className="citation">Guideline: {rule.source.section}</p>}
+                  <p className="citation">
+                    Guideline: <Citation source={rule.source} />
+                  </p>
                 </div>
               </div>
               {!otherwise && (

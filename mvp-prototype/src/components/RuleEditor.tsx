@@ -145,7 +145,7 @@ export default function RuleEditor({
                     onChange={(v) => onChangeCondition(c.key, { value: v })}
                   />
                 )}
-                {q && q.type === 'select' && (
+                {q && q.type === 'select_one' && (
                   <SelectField
                     id={valueId}
                     label={<>{prefix}Answer</>}

@@ -45,7 +45,9 @@ export function emptyDraft(): RequirementsDraft {
     guidelineVersion: '',
     questions: [emptyQuestion()],
     rules: [emptyRule()],
-    otherwise: { ...emptyOutcome(), action: 'home_care_advice' },
+    // Blank on purpose: the catch-all is a clinical decision, so nothing is preselected.
+    otherwise: emptyOutcome(),
+    otherwiseSource: '',
   };
 }
 
@@ -109,5 +111,6 @@ export function exampleDraft(): RequirementsDraft {
       ),
     ],
     otherwise: { action: 'home_care_advice', followUp: false, dueInDays: '', openForDays: '' },
+    otherwiseSource: '',
   };
 }

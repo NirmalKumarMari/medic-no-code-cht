@@ -59,7 +59,7 @@ export function validateDraft(d: RequirementsDraft): FieldError[] {
     } else {
       seen.set(label, n);
     }
-    if (q.type === 'select' && parseChoices(q.choices).length < 2) {
+    if (q.type === 'select_one' && parseChoices(q.choices).length < 2) {
       errors.push({
         fieldId: `q-${q.key}-choices`,
         message: `Question ${n}: enter at least 2 choices, separated by commas`,
