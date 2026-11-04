@@ -8,10 +8,11 @@
   "workspaces": [
     "packages/*",
     "schemas",
-    "agents/*"
+    "agents/*",
+    "mvp-prototype"
   ],
   "scripts": {
-    "build": "tsc --build && npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data",
+    "build": "tsc --build && npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && npm run build --workspace @vera/review-model && npm run build --workspace @vera/review-api && npm run build --workspace @vera/review-ui",
     "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json && npm run check --workspaces --if-present",
     "check": "npm run build && npm run typecheck",
     "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",
@@ -27,7 +28,11 @@
     "synth:workflow": "cdk synth vera-workflow-data",
     "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json",
     "db:local:up": "docker compose -f packages/workflow-data/compose.yaml up -d",
-    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down"
+    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down",
+    "ui:dev": "npm run dev --workspace @vera/review-ui",
+    "api:dev": "npm run dev --workspace @vera/review-api",
+    "review:local:setup": "npm run build && npm run db:local:up && npm run local:setup --workspace @vera/review-api",
+    "review:local:api": "REVIEW_MODE=local npm run dev --workspace @vera/review-api"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",

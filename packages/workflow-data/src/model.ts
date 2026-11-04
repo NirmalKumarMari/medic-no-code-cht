@@ -61,6 +61,8 @@ export interface DecisionInput {
   changeId: string; snapshotHash: string; gate: Gate; decisionId: string;
   idempotencyKey: string; decision: 'approve' | 'reject'; notes?: string;
   acknowledgedFlagIds?: string[];
+  buildId?: string;
+  flagAcknowledgements?: { flagId: string; acknowledgedAt: string }[];
 }
 export interface TestSummary {
   passed: boolean; branchCount: number; coveredBranches: number;
@@ -91,6 +93,6 @@ export function hasRole(ctx: HumanContext, allowed: Role[]): void {
   requireData(ctx.groups.some(g => allowed.includes(g)), 'FORBIDDEN', 'Role is not permitted for this operation');
 }
 export function safeDecision(row: Item): Item {
-  const { changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, historyFlags } = row;
-  return Object.fromEntries(Object.entries({ changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, historyFlags }).filter(([, v]) => v !== undefined));
+  const { changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, flagAcknowledgements, historyFlags } = row;
+  return Object.fromEntries(Object.entries({ changeId, sk, gate, snapshotHash, decisionId, decision, actorId, actorRole, notes, createdAt, buildId, artifactDigest, targetId, acknowledgedFlagIds, flagAcknowledgements, historyFlags }).filter(([, v]) => v !== undefined));
 }

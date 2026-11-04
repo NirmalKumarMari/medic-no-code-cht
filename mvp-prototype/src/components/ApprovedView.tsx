@@ -34,11 +34,11 @@ export default function ApprovedView({ model, note, onStartOver }: Props) {
 
       <section className="card" aria-labelledby="next-heading">
         <h3 id="next-heading">What happens next in the full system</h3>
-        <p className="hint">Only step 1 exists in this prototype.</p>
+        <p className="hint">The content decision is saved. The workflow owns build, test and the separate deployment approval.</p>
         <ol className="pipeline">
           {NEXT_STEPS.map((step) => (
             <li key={step.title} className={step.done ? 'done' : undefined}>
-              <strong>{step.title}</strong> <span className="pill">{step.done ? 'Done' : 'Not in prototype'}</span>
+              <strong>{step.title}</strong> <span className="pill">{step.done ? 'Done' : 'Pending workflow'}</span>
               <p>{step.detail}</p>
             </li>
           ))}

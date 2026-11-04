@@ -59,9 +59,11 @@ export class WorkflowRepository {
       ConditionExpression: '#version = :oldVersion AND snapshotHash = :oldHash AND tenantId = :tenant',
       ExpressionAttributeNames: names, ExpressionAttributeValues: values } };
   }
-  private event(row: Pick<Change, 'changeId' | 'tenantId' | 'snapshotHash'> & { executionArn?: string; snapshotId?: string }, type: string, actorId: string, details: Item = {}): Write {
+  private event(row: Pick<Change, 'changeId' | 'tenantId' | 'snapshotHash'> & { executionArn?: string; snapshotId?: string; state?: string }, type: string, actorId: string, details: Item = {}): Write {
     const time = this.stamp(); const eventId = randomUUID();
-    return this.insert(this.tables.audit, { changeId: row.changeId, sk: `${time}#${eventId}`,
+    const transitions: Record<string,string> = { 'snapshot.created':'draft','snapshot.revised':'draft','content.review_opened':'content_review','deploy.review_opened':'deploy_review','content.approve':'content_approved','content.reject':'rejected','deploy.approve':'deploy_approved','deploy.reject':'rejected','build.failed':'build_failed','deployment.started':'deploying','deployment.verified':'deployed','deployment.failure_reconciled':'deploy_approved' };
+    const toState = type === 'validation.recorded' ? (details.passed ? 'checked':'draft_failed') : type === 'build.recorded' && details.buildKind === 'release' ? 'built' : type === 'test.recorded' ? (details.passed ? 'tested':'test_failed') : transitions[type];
+    return this.insert(this.tables.audit, { ...(toState ? { fromState: type === 'snapshot.created' ? null : row.state ?? null, toState } : {}), changeId: row.changeId, sk: `${time}#${eventId}`,
       tenantId: row.tenantId, eventId, type, actorId, snapshotHash: row.snapshotHash, snapshotId: row.snapshotId, executionArn: row.executionArn, createdAt: time, ...details });
   }
   async commit(items: Write[]): Promise<void> {
@@ -232,7 +234,23 @@ export class WorkflowRepository {
     const token = await this.read(this.tables.tokens, row.changeId, row.activeWaitSk);
     requireData(token?.status === 'pending' && token.snapshotHash === row.snapshotHash && token.gate === input.gate, 'STALE_TOKEN', 'No active callback attempt matches this decision');
     requireData(token.expiresAt > this.stamp(), 'EXPIRED_TOKEN', 'Approval wait has expired');
+    if (input.gate === 'deploy' && input.buildId !== undefined) requireData(input.buildId === token.buildId, 'STALE_BUILD', 'The displayed build no longer matches the pending approval');
     const acknowledged = [...new Set(input.acknowledgedFlagIds ?? [])];
+    requireData(acknowledged.length === (input.acknowledgedFlagIds ?? []).length, 'DUPLICATE_FLAGS', 'A flag may be acknowledged only once');
+    requireData(acknowledged.every(id => (token.historyFlagIds ?? []).includes(id)), 'UNKNOWN_FLAGS', 'An acknowledgement names a flag outside this pending review');
+    const acknowledgementChecks: Write[] = [];
+    const flagAcknowledgements: Item[] = [];
+    if (input.flagAcknowledgements !== undefined) {
+      requireData(input.flagAcknowledgements.length === acknowledged.length && new Set(input.flagAcknowledgements.map(a => a.flagId)).size === acknowledged.length, 'INVALID_ACKNOWLEDGEMENTS', 'Flag acknowledgement records must match the selected identifiers');
+      for (const ack of input.flagAcknowledgements) {
+        requireData(acknowledged.includes(ack.flagId), 'UNKNOWN_FLAGS', 'Unknown acknowledged flag');
+        const ackSk = `ACK#${row.snapshotHash}#${token.buildId}#${sha256(ctx.subject)}#${ack.flagId}`;
+        const stored = await this.read(this.tables.changes, row.changeId, ackSk);
+        requireData(stored?.selected === true && stored.actorId === ctx.subject && stored.acknowledgedAt === ack.acknowledgedAt && stored.tenantId === ctx.tenantId, 'STALE_ACKNOWLEDGEMENT', 'Select each flag acknowledgement again for this exact build');
+        acknowledgementChecks.push({ ConditionCheck: { TableName: this.tables.changes, Key: { changeId: row.changeId, sk: ackSk }, ConditionExpression: 'selected = :yes AND acknowledgedAt = :at', ExpressionAttributeValues: { ':yes': true, ':at': stored.acknowledgedAt } } });
+        flagAcknowledgements.push({ flagId: ack.flagId, actorId: ctx.subject, acknowledgedAt: stored.acknowledgedAt });
+      }
+    }
     for (const flag of acknowledged) idSchema.parse(flag);
     if (input.gate === 'deploy' && input.decision === 'approve') requireData((token.historyFlagIds as string[]).every(id => acknowledged.includes(id)), 'UNACKNOWLEDGED_FLAGS', 'IT must acknowledge each advisory history flag');
     const decisionKey = `${input.gate.toUpperCase()}#${row.snapshotHash}#${input.decisionId}`;
@@ -240,7 +258,7 @@ export class WorkflowRepository {
       gate: input.gate, snapshotHash: row.snapshotHash, decision: input.decision, actorId: ctx.subject,
       actorRole: ctx.groups.find(g => allowed.includes(g as never)), authorId: row.authorId, notes: input.notes ?? '',
       createdAt: this.stamp(), idempotencyKey: input.idempotencyKey, buildId: token.buildId, artifactDigest: token.artifactDigest, targetId: token.targetId,
-      expectedPriorDeploymentId: token.expectedPriorDeploymentId, acknowledgedFlagIds: acknowledged, historyFlags: row.historyFlags ?? [],
+      expectedPriorDeploymentId: token.expectedPriorDeploymentId, acknowledgedFlagIds: acknowledged, ...(input.flagAcknowledgements !== undefined ? { flagAcknowledgements } : {}), historyFlags: row.historyFlags ?? [],
       validationReport: row.validationReport, testReport: row.testReport, diffReport: row.diffReport, executionArn: row.executionArn });
     const payload = clean({ changeId: row.changeId, snapshotHash: row.snapshotHash, gate: input.gate, decisionId: input.decisionId,
       decision: input.decision, buildId: token.buildId, artifactDigest: token.artifactDigest });
@@ -259,7 +277,7 @@ export class WorkflowRepository {
       }
     }
     try {
-      await this.commit([...rejectedRules, this.insert(this.tables.approvals, decision), this.insert(this.tables.approvals, { changeId: row.changeId,
+      await this.commit([...acknowledgementChecks, ...rejectedRules, this.insert(this.tables.approvals, decision), this.insert(this.tables.approvals, { changeId: row.changeId,
         sk: receiptKey, tenantId: row.tenantId, requestHash, decisionKey, createdAt: this.stamp() }),
         this.metaUpdate(row, patch), this.event(row, `${input.gate}.${input.decision}`, ctx.subject, { decisionId: input.decisionId, decisionKey }),
         { Update: { TableName: this.tables.tokens, Key: { changeId: row.changeId, sk: token.sk },
@@ -268,6 +286,20 @@ export class WorkflowRepository {
           ExpressionAttributeValues: { ':decided': 'decided', ':pending': 'pending', ':payload': payload, ':queue': row.tenantId, ':now': this.stamp(), ':key': decisionKey, ':zero': 0 } } }]);
     } catch (error) { if ((error as WorkflowDataError).code === 'CONFLICT') { const won = await replay(); if (won) return won; } throw error; }
     return safeDecision(decision);
+  }
+  async acknowledgeFlag(ctx: HumanContext, input: { changeId: string; snapshotHash: string; buildId: string; flagId: string; selected: boolean }): Promise<Item> {
+    hasRole(ctx, ['it_deploy']); idSchema.parse(input.flagId); idSchema.parse(input.buildId);
+    const row = await this.getChange(ctx,input.changeId); this.expected(row,input.snapshotHash);
+    const token = row.activeWaitSk ? await this.read(this.tables.tokens,row.changeId,row.activeWaitSk) : undefined;
+    requireData(row.state === 'deploy_review' && token?.status === 'pending' && token.gate === 'deploy' && token.buildId === input.buildId && token.snapshotHash === input.snapshotHash && token.expiresAt > this.stamp(), 'STALE_TOKEN', 'No pending deploy review matches this build');
+    requireData(token.historyFlagIds.includes(input.flagId), 'UNKNOWN_FLAGS', 'This flag is not part of the pending deploy review');
+    const acknowledgedAt = this.stamp().replace(/\.\d{3}Z$/, 'Z');
+    const sk = `ACK#${row.snapshotHash}#${input.buildId}#${sha256(ctx.subject)}#${input.flagId}`;
+    const item = { changeId: row.changeId,sk,tenantId:ctx.tenantId,actorId:ctx.subject,flagId:input.flagId,buildId:input.buildId,snapshotHash:row.snapshotHash,selected:input.selected,acknowledgedAt };
+    await this.commit([{Put:{TableName:this.tables.changes,Item:item}},
+      {ConditionCheck:{TableName:this.tables.changes,Key:{changeId:row.changeId,sk:'META'},ConditionExpression:'#v = :v AND snapshotHash = :hash',ExpressionAttributeNames:{'#v':'version'},ExpressionAttributeValues:{':v':row.version,':hash':row.snapshotHash}}},
+      this.event(row,'deploy.flag_acknowledged',ctx.subject,{flagId:input.flagId,selected:input.selected,acknowledgedAt})]);
+    return {flagId:input.flagId,selected:input.selected,acknowledgedAt,actorId:ctx.subject};
   }
   async assertContentApproved(ctx: WorkflowContext, changeId: string, hash: string): Promise<Change> {
     const row = await this.getChange(ctx, changeId); this.worker(ctx, row); this.expected(row, hash);

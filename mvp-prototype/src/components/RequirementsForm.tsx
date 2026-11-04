@@ -154,7 +154,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
     if (hasContent(draft) && !window.confirm('Replace what you have entered with the example?')) return;
     setDraft(exampleDraft());
     setAttempted(false);
-    setStatus('Example filled in. Check it, then choose Generate flowchart.');
+    setStatus('Example filled in. Check it, then choose Save draft and show flowchart.');
   }
 
   function handleSubmit(e: FormEvent) {
@@ -354,7 +354,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
 
       <div className="button-bar">
         <button type="submit" className="btn">
-          Generate flowchart
+          Save draft and show flowchart
         </button>
       </div>
     </form>

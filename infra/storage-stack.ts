@@ -1,5 +1,8 @@
 import {
   Stack,
+  BootstraplessSynthesizer,
+  CfnCondition,
+  Fn,
   CfnOutput,
   CfnParameter,
   RemovalPolicy,
@@ -16,10 +19,11 @@ import * as bedrock from "aws-cdk-lib/aws-bedrock";
 /** November 4 design: one artifact store, direct prompt context, no indexed corpus. */
 export class StorageStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props);
+    super(scope, id, { synthesizer: new BootstraplessSynthesizer(), ...props });
     Tags.of(this).add("project", "breaking-barriers");
     const agentRoles = new CfnParameter(this, "AgentRoleNames", {
       type: "CommaDelimitedList",
+      default: "",
       description: "All agent role names; never supply trusted worker roles.",
     });
     const key = new kms.Key(this, "StorageKey", {
@@ -125,7 +129,16 @@ export class StorageStack extends Stack {
         resources: [artifacts.bucketArn],
       }),
     );
-    new iam.CfnManagedPolicy(this, "AgentStorageDeny", {
+    const configuredAgentRoles = new CfnCondition(
+      this,
+      "ConfiguredAgentRoles",
+      {
+        expression: Fn.conditionNot(
+          Fn.conditionEquals(Fn.join(",", agentRoles.valueAsList), ""),
+        ),
+      },
+    );
+    const agentDeny = new iam.CfnManagedPolicy(this, "AgentStorageDeny", {
       roles: agentRoles.valueAsList,
       policyDocument: {
         Version: "2012-10-17",
@@ -160,6 +173,7 @@ export class StorageStack extends Stack {
         ],
       },
     });
+    agentDeny.cfnOptions.condition = configuredAgentRoles;
     for (const [name, value] of Object.entries({
       ArtifactBucket: artifacts.bucketName,
       KmsKeyArn: key.keyArn,

@@ -160,3 +160,9 @@ publications.json
 
 # Unified infrastructure deployment outputs
 workflow-outputs.json
+
+# Local review API artifacts
+.local/
+
+# Workshop production build
+mvp-prototype/dist-workshop/

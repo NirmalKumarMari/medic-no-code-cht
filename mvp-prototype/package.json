@@ -1,19 +1,20 @@
 {
-  "name": "medic-no-code-cht-mvp",
+  "name": "@vera/review-ui",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "MVP prototype UI for the Medic no-code CHT solution. Stubbed, visualize-only. Separate from future build.",
+  "description": "Vera structured authoring and review UI backed by the review API.",
   "scripts": {
     "dev": "vite",
     "dev:proxy": "vite --mode proxy",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --import ./test/register.mjs --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@vera/review-model": "0.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
