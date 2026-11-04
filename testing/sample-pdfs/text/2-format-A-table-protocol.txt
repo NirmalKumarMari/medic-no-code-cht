@@ -1,0 +1,59 @@
+                    SYNTHETIC TEST DOCUMENT | Fictional ministry | Not real clinical guidance
+
+
+
+
+ Ministry of Health, Republic of Examplia (fictional)
+
+ Community Newborn Visit Protocol
+ Protocol EX-MNH-07, edition 3. Applies to community health workers at every postnatal home visit.
+
+
+ 1. Visit schedule
+   Visit                      When
+
+   Visit 1                    Within 24 hours of birth (or before facility discharge)
+
+   Visit 2                    Day 3 (48 to 72 hours after birth)
+
+   Visit 3                    Between day 7 and day 14
+
+   Visit 4                    Week 6 after birth
+
+
+ 2. Danger sign check (Table 2)
+ Check every sign at every visit. If ANY sign in Table 2 is present, refer the newborn to a health facility for
+ further evaluation. If no sign is present, give routine postnatal care.
+
+   Sign                         Danger if                                                            Action
+
+   Feeding                      Not feeding well                                                     REFER
+
+   Convulsions                  Any history of convulsions                                           REFER
+
+   Breathing rate               More than 60 breaths per minute                                      REFER
+
+   Chest                        Severe chest in-drawing                                              REFER
+
+   Movement                     No spontaneous movement                                              REFER
+
+   Temperature (high)           Above 37.5 °C                                                        REFER
+
+   Temperature (low)            Below 35.5 °C                                                        REFER
+
+   Jaundice                     Any jaundice when the baby is less than 24 hours old                 REFER
+
+   Palms and soles              Yellow palms and soles, at any age                                   REFER
+
+   None of the above            —                                                                    Routine postnatal care
+
+
+ Clinical content adapted from: WHO recommendations on maternal and newborn care for a positive postnatal experience.
+ Geneva: World Health Organization; 2022. Licence: CC BY-NC-SA 3.0 IGO. This adaptation was not created by WHO; WHO is
+ not responsible for its content.
+
+
+
+
+SYNTHETIC TEST DOCUMENT. Not for clinical use.                                                                           Page 1
+

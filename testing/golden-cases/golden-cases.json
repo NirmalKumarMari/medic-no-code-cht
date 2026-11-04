@@ -1,0 +1,492 @@
+{
+  "goldenCaseVersion": "newborn-danger-signs/draft-1",
+  "status": "DRAFT: not yet confirmed by a Medic clinician. Do not treat as final until confirmed.",
+  "pathway": "Newborn danger signs at a postnatal visit",
+  "guideline": {
+    "name": "WHO recommendations on maternal and newborn care for a positive postnatal experience",
+    "version": "2022",
+    "isbn": "978-92-4-004598-9",
+    "file": "sample-pdfs/1-who-postnatal-2022-full.pdf"
+  },
+  "sourcePassage": {
+    "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+    "page": 13,
+    "printedPage": "xii",
+    "quote": "The following signs should be assessed during each postnatal care contact, and the newborn should be referred for further evaluation if any of the signs is present: not feeding well; history of convulsions; fast breathing (breathing rate > 60 per minute); severe chest in-drawing; no spontaneous movement; fever (temperature > 37.5 °C); low body temperature (temperature < 35.5 °C); any jaundice in first 24 hours after birth, or yellow palms and soles at any age."
+  },
+  "actions": {
+    "refer_urgently": "Refer for further evaluation (Rec 25)",
+    "home_care_advice": "No danger signs: continue routine postnatal care"
+  },
+  "inputs": [
+    {
+      "id": "age_hours",
+      "type": "integer",
+      "label": "Baby's age in hours"
+    },
+    {
+      "id": "feeding_well",
+      "type": "yes_no",
+      "label": "Is the baby feeding well?"
+    },
+    {
+      "id": "history_of_convulsions",
+      "type": "yes_no",
+      "label": "Has the baby had convulsions (fits)?"
+    },
+    {
+      "id": "breaths_per_min",
+      "type": "integer",
+      "label": "Breaths per minute (count for one full minute)"
+    },
+    {
+      "id": "severe_chest_indrawing",
+      "type": "yes_no",
+      "label": "Severe chest in-drawing?"
+    },
+    {
+      "id": "moves_spontaneously",
+      "type": "yes_no",
+      "label": "Does the baby move on its own?"
+    },
+    {
+      "id": "temperature_c",
+      "type": "decimal",
+      "label": "Temperature (°C)"
+    },
+    {
+      "id": "jaundice",
+      "type": "yes_no",
+      "label": "Any yellow skin or eyes (jaundice)?"
+    },
+    {
+      "id": "yellow_palms_soles",
+      "type": "yes_no",
+      "label": "Yellow palms and soles?"
+    }
+  ],
+  "openQuestionsForClinician": [
+    "Exactly 24 hours old with jaundice: is that still 'in the first 24 hours'? Not used as a golden case until a clinician decides.",
+    "G14: after 24 hours, is jaundice without yellow palms and soles really not a referral sign? The guideline wording says so; please confirm.",
+    "Follow-up after a referral: Recommendation 25 does not say when to follow up, so no golden case expects a follow-up task.",
+    "Actions use the team's locked list: 'refer_urgently' stands for 'refer for further evaluation'; 'home_care_advice' stands for 'no danger signs, continue routine postnatal care'."
+  ],
+  "cases": [
+    {
+      "id": "G01",
+      "title": "Healthy newborn, no danger signs",
+      "kind": "normal",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "home_care_advice",
+        "followUp": null
+      },
+      "why": "Baseline. No sign present, so no referral.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G02",
+      "title": "Not feeding well",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "no",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "'not feeding well' is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G03",
+      "title": "History of convulsions",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "yes",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "'history of convulsions' is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G04",
+      "title": "Fast breathing, 61 per minute",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 61,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "61 is more than 60, so fast breathing.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G05",
+      "title": "Breathing exactly 60 per minute",
+      "kind": "edge",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 60,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "home_care_advice",
+        "followUp": null
+      },
+      "why": "EDGE: guideline says '> 60'. 60 is NOT more than 60. Catches an AI that writes '60 or more'.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G06",
+      "title": "Severe chest in-drawing",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "yes",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "'severe chest in-drawing' is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G07",
+      "title": "No spontaneous movement",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "no",
+        "temperature_c": 36.8,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "'no spontaneous movement' is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G08",
+      "title": "Fever, 37.6 °C",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 37.6,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "37.6 is above 37.5, so fever.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G09",
+      "title": "Temperature exactly 37.5 °C",
+      "kind": "edge",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 37.5,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "home_care_advice",
+        "followUp": null
+      },
+      "why": "EDGE: guideline says '> 37.5'. 37.5 is NOT a fever.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G10",
+      "title": "Low temperature, 35.4 °C",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 35.4,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "35.4 is below 35.5, so low body temperature.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G11",
+      "title": "Temperature exactly 35.5 °C",
+      "kind": "edge",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 35.5,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "home_care_advice",
+        "followUp": null
+      },
+      "why": "EDGE: guideline says '< 35.5'. 35.5 is NOT low.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G12",
+      "title": "Jaundice at 12 hours old",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 12,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "yes",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "Any jaundice in the first 24 hours is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G13",
+      "title": "Jaundice at 23 hours old",
+      "kind": "edge",
+      "inputs": {
+        "age_hours": 23,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "yes",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "EDGE: still inside the first 24 hours.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G14",
+      "title": "Jaundice at 3 days old, palms and soles not yellow",
+      "kind": "edge",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "yes",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "home_care_advice",
+        "followUp": null
+      },
+      "why": "EDGE: after 24 hours, jaundice alone is not on the Rec 25 list; only yellow palms and soles are. CLINICIAN MUST CONFIRM this reading.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G15",
+      "title": "Yellow palms and soles at 10 days old",
+      "kind": "sign",
+      "inputs": {
+        "age_hours": 240,
+        "feeding_well": "yes",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 45,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 36.8,
+        "jaundice": "yes",
+        "yellow_palms_soles": "yes"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "'yellow palms and soles at any age' is a danger sign.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    },
+    {
+      "id": "G16",
+      "title": "Several signs at once",
+      "kind": "combo",
+      "inputs": {
+        "age_hours": 72,
+        "feeding_well": "no",
+        "history_of_convulsions": "no",
+        "breaths_per_min": 70,
+        "severe_chest_indrawing": "no",
+        "moves_spontaneously": "yes",
+        "temperature_c": 38.2,
+        "jaundice": "no",
+        "yellow_palms_soles": "no"
+      },
+      "expected": {
+        "action": "refer_urgently",
+        "followUp": null
+      },
+      "why": "More than one sign still gives one answer: refer.",
+      "source": {
+        "section": "Executive summary, B. Newborn care, Recommendation 25 (Assessment of the newborn for danger signs)",
+        "page": 13,
+        "printedPage": "xii"
+      }
+    }
+  ]
+}
