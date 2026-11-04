@@ -11,9 +11,9 @@
     "agents/*"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json",
-    "check": "npm run typecheck && npm run check --workspaces --if-present",
+    "build": "tsc --build && npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data",
+    "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json && npm run check --workspaces --if-present",
+    "check": "npm run build && npm run typecheck",
     "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",
     "test:agents": "node --test --import tsx 'agents/**/test/*.test.ts' 'schemas/test/*.test.ts'",
     "test:infra": "tsx --test tests/infra/*.test.ts",
