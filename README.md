@@ -249,3 +249,7 @@ Team Vera, AWS Breaking Barriers 2026, Seattle.
 ## Artifact storage and retrieval implementation
 
 The `database` branch adds TypeScript CDK infrastructure, versioned artifact helpers, screened ingestion, and a cited retrieval adapter. See [storage setup, deployment, validation, and teardown](docs/STORAGE.md) and the [integration handoff](docs/HANDOFF.md). Local tests and synthesis pass; live deployment and retrieval verification require configured AWS access.
+
+## Workflow state, approvals and audit implementation
+
+Yash's component lives in [packages/workflow-data](packages/workflow-data/README.md), with its own dependencies and commands. It adds four DynamoDB tables, hash-bound snapshots, transactional human decisions, durable Step Functions callback delivery, audit queries and verified release history. See the [deployment and verification status](packages/workflow-data/docs/STATUS.md) and [integration handoff](packages/workflow-data/docs/INTEGRATION.md) for the shared artifact contract and remaining application wiring. The four DynamoDB tables are deployed in `us-west-2`; the live storage probe and 43 local checks pass. Real workflow/authentication/build/deploy integration remains with the corresponding application components.

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+cdk.out/
+.artifacts/
+*.zip
+deployment.local.json
