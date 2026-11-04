@@ -1,0 +1,171 @@
+{
+  "logicModel": {
+    "schemaVersion": "logic-model/v1",
+    "snapshotId": "baseline-1",
+    "pathway": "Synthetic follow-up",
+    "guideline": {
+      "name": "Synthetic testing guideline",
+      "version": "1"
+    },
+    "inputs": [
+      {
+        "id": "danger_sign",
+        "type": "yes_no",
+        "label": "Any danger sign?"
+      },
+      {
+        "id": "notes",
+        "type": "text",
+        "label": "Notes"
+      }
+    ],
+    "rules": [
+      {
+        "id": "referral",
+        "when": {
+          "input": "danger_sign",
+          "eq": "yes"
+        },
+        "then": {
+          "action": "refer_urgently"
+        },
+        "followUp": {
+          "dueInDays": 3,
+          "openForDays": 7
+        },
+        "source": {
+          "section": "follow-up",
+          "page": 1
+        }
+      },
+      {
+        "id": "default",
+        "when": {
+          "otherwise": true
+        },
+        "then": {
+          "action": "home_care_advice"
+        },
+        "source": {
+          "section": "fixture-existing",
+          "page": 1
+        }
+      }
+    ],
+    "flags": []
+  },
+  "snapshotHash": "1d62c5522931ad2a42dd432d2a5003c5f70d641b42dcd894cabd9880a2081232",
+  "hashInputs": {
+    "schemaVersion": "logic-model/v1",
+    "baselineRevision": "synthetic-root",
+    "spec": {
+      "schemaVersion": "logic-model/v1",
+      "snapshotId": "baseline-1",
+      "pathway": "Synthetic follow-up",
+      "guideline": {
+        "name": "Synthetic testing guideline",
+        "version": "1"
+      },
+      "inputs": [
+        {
+          "id": "danger_sign",
+          "type": "yes_no",
+          "label": "Any danger sign?"
+        },
+        {
+          "id": "notes",
+          "type": "text",
+          "label": "Notes"
+        }
+      ],
+      "rules": [
+        {
+          "id": "referral",
+          "when": {
+            "input": "danger_sign",
+            "eq": "yes"
+          },
+          "then": {
+            "action": "refer_urgently"
+          },
+          "followUp": {
+            "dueInDays": 3,
+            "openForDays": 7
+          },
+          "source": {
+            "section": "follow-up",
+            "page": 1
+          }
+        },
+        {
+          "id": "default",
+          "when": {
+            "otherwise": true
+          },
+          "then": {
+            "action": "home_care_advice"
+          },
+          "source": {
+            "section": "fixture-existing",
+            "page": 1
+          }
+        }
+      ],
+      "flags": []
+    },
+    "evidenceVersions": [
+      {
+        "sourceId": "synthetic-guideline",
+        "version": "1",
+        "sha256": "e098a09caf51c61758651728292a0323fab257c0c3a2fa089a89fcfaad5d4ba3",
+        "sourceS3Ref": {
+          "bucket": "fixture-only",
+          "key": "docs/guideline.txt",
+          "versionId": "synthetic-v1",
+          "sha256": "e098a09caf51c61758651728292a0323fab257c0c3a2fa089a89fcfaad5d4ba3",
+          "contentType": "text/plain"
+        }
+      }
+    ],
+    "retrievalEvidenceRefs": [],
+    "goldenCaseVersion": "synthetic-cases-v1",
+    "compilerVersion": "fixture-only",
+    "toolchainImageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "plannerContext": {
+    "text": "CHT engineering primer cht-conventions-2026-11-04.1:\n[cht-tasks] Task definitions distinguish eligibility (appliesIf), resolution (resolvedIf), actions and event timing. A task action identifies its form. Event start and end describe a window around a due date; do not equate start with the number of days until due. Preserve dueInDays and openForDays as separate approved values; the deterministic compiler owns their mapping to CHT event fields.\n[cht-reference] Reference applications keep app/contact forms as XLSForm spreadsheets, later converted to XForm XML. A question has a stable name, a type and a label. Changing displayed wording does not require renaming its identifier. Configuration changes require compilation before upload.\nVera rules: represent conditions, actions and follow-up once in the structured logic. Never generate XLSForm, XPath or JavaScript here. Keep IDs and unrelated content unchanged. The compiler, deterministic checks and humans own later gates. These engineering sources do not supply clinical thresholds, referral criteria or treatment advice. Cite clinical rules to the supplied public guideline; flag missing evidence instead of inventing a passage.",
+    "source": {
+      "sourceId": "cht-conventions-primer",
+      "version": "cht-conventions-2026-11-04.1",
+      "sourceHash": "3d4b79f837288ac2ab3faa498402973449e3504ad3f2ee3bb0e9c44aa347115d",
+      "sourceS3Ref": {
+        "bucket": "fixture-only",
+        "key": "docs/primer.txt",
+        "versionId": "synthetic-v1",
+        "sha256": "3d4b79f837288ac2ab3faa498402973449e3504ad3f2ee3bb0e9c44aa347115d",
+        "contentType": "text/plain"
+      },
+      "provenanceRef": {
+        "bucket": "fixture-only",
+        "key": "docs/primer-provenance.json",
+        "versionId": "synthetic-v1",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "contentType": "application/json"
+      }
+    },
+    "contextHash": "4f0988f1cdd33856a688a90461383ed25c30df2d6485cc9923e097d9ec0a4c46",
+    "evidenceRef": {
+      "bucket": "fixture-only",
+      "key": "reports/demo-edit-1/context/baseline-1/request-1.json",
+      "versionId": "synthetic-v1",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "contentType": "application/json"
+    }
+  },
+  "guideline": {
+    "sourceId": "synthetic-guideline",
+    "version": "1",
+    "sha256": "e098a09caf51c61758651728292a0323fab257c0c3a2fa089a89fcfaad5d4ba3",
+    "text": "SYNTHETIC GUIDELINE FOR TESTS ONLY. Section follow-up: schedule a follow-up in two days and keep its task open for seven days. This is not clinical guidance."
+  }
+}
