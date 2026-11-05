@@ -76,7 +76,7 @@ export function runChecks(model: LogicModel): CheckResult[] {
   const unused = inputs.filter((input) => !usedInputIds(model).has(input.id));
   const unusedCheck: CheckResult = {
     id: 'unused-questions',
-    title: 'Every question affects an outcome',
+    title: 'Questions no rule uses',
     status: unused.length ? 'warning' : 'pass',
     summary: unused.length
       ? `${count(unused.length, 'question is', 'questions are')} not read by any rule.`
@@ -87,7 +87,7 @@ export function runChecks(model: LogicModel): CheckResult[] {
   const uncited = rules.flatMap((rule, i) => (hasCitation(rule.source) ? [] : [ruleName(rule, i)]));
   const citations: CheckResult = {
     id: 'citations',
-    title: 'Every rule says where it comes from in the guideline',
+    title: 'Rules with no guideline reference',
     status: uncited.length ? 'warning' : 'pass',
     summary: uncited.length
       ? `${count(uncited.length, 'rule has', 'rules have')} no guideline reference. Check ${uncited.length === 1 ? 'it' : 'them'} against the guideline.`
@@ -154,10 +154,10 @@ export function runChecks(model: LogicModel): CheckResult[] {
   const catchAllLabel = hasCatchAll ? actionLabel(last.then.action) : undefined;
   const coverage: CheckResult = {
     id: 'coverage',
-    title: 'Patients covered only by the "otherwise" outcome',
+    title: 'Patients no rule covers',
     status: reachedOnlyCatchAll.length ? 'warning' : 'pass',
     summary: reachedOnlyCatchAll.length
-      ? `${reachedOnlyCatchAll.length} of ${patients.length} tested combinations of answers match no specific rule and get "${catchAllLabel}". Check the guideline means this for them, including the examples below.`
+      ? `These patients get "${catchAllLabel}". Check this matches the guideline.`
       : 'No tested combination of answers relies on the "otherwise" outcome.',
     details: reachedOnlyCatchAll.length
       ? extremes(reachedOnlyCatchAll, model).map((patient) => describePatient(patient, inputs))
@@ -173,10 +173,10 @@ export function runChecks(model: LogicModel): CheckResult[] {
   });
   const overlap: CheckResult = {
     id: 'overlap',
-    title: 'Rules that overlap with different outcomes',
+    title: 'Rules that overlap',
     status: overlapDetails.length ? 'warning' : 'pass',
     summary: overlapDetails.length
-      ? `${count(overlapDetails.length, 'pair of rules overlaps', 'pairs of rules overlap')}. Check the rule order matches the guideline.`
+      ? `${count(overlapDetails.length, 'pair of rules gives', 'pairs of rules give')} different outcomes for the same patient. Check the order matches the guideline.`
       : 'No two rules give different outcomes for the same patient.',
     details: overlapDetails,
   };

@@ -36,9 +36,16 @@ export function matches(expr: unknown, patient: Patient): boolean {
     case 'leaf': {
       const answer = patient[parsed.input];
       if (answer === undefined) return false;
-      if (parsed.op === 'eq') return normaliseEq(answer) === normaliseEq(parsed.value);
+      const { op, value } = parsed;
+      if (op === 'in') return (value as (string | number)[]).map(normaliseEq).includes(normaliseEq(answer));
+      if (op === 'eq') return normaliseEq(answer) === normaliseEq(value as string | number | boolean);
+      if (op === 'neq') return normaliseEq(answer) !== normaliseEq(value as string | number | boolean);
       if (typeof answer !== 'number') return false;
-      return parsed.op === 'gte' ? answer >= (parsed.value as number) : answer < (parsed.value as number);
+      const limit = value as number;
+      if (op === 'gte') return answer >= limit;
+      if (op === 'gt') return answer > limit;
+      if (op === 'lte') return answer <= limit;
+      return answer < limit;
     }
     case 'invalid':
       return false;
@@ -54,7 +61,10 @@ function collectLeaves(expr: unknown, leaves: Leaf[] = []): Leaf[] {
   const parsed = parseExpr(expr);
   if (parsed.kind === 'all' || parsed.kind === 'any') parsed.items.forEach((item) => collectLeaves(item, leaves));
   if (parsed.kind === 'not') collectLeaves(parsed.item, leaves);
-  if (parsed.kind === 'leaf') leaves.push({ input: parsed.input, value: parsed.value });
+  if (parsed.kind === 'leaf') {
+    const values = Array.isArray(parsed.value) ? parsed.value : [parsed.value];
+    values.forEach((value) => leaves.push({ input: parsed.input, value }));
+  }
   return leaves;
 }
 

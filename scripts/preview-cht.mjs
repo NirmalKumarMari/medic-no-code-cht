@@ -34,6 +34,14 @@ const quote = value => {
   return text.includes("'") ? `concat(${text.split("'").map(part => `'${part}'`).join(`, "'", `)})` : `'${text}'`;
 };
 const field = name => '${' + name + '}';
+const answerText = value => typeof value === 'boolean' ? value ? 'yes' : 'no' : String(value);
+const NUMERIC = { gte: '>=', gt: '>', lte: '<=', lt: '<' };
+function numericLimit(expr) {
+  const op = Object.keys(NUMERIC).find(key => key in expr);
+  // Never compile a condition this code does not understand into a rule that silently never fires.
+  if (!op || !Number.isFinite(expr[op])) throw Error('Unsupported condition in the logic model');
+  return [NUMERIC[op], expr[op]];
+}
 function condition(expr, names) {
   if ('otherwise' in expr) return 'true()';
   if ('all' in expr) return `(${expr.all.map(part => condition(part, names)).join(' and ')})`;
@@ -42,12 +50,39 @@ function condition(expr, names) {
   const input = names.get(expr.input);
   if (!input) throw Error('Native CHT rule refers to an unknown input');
   const ref = field(input.name);
+  const encode = value => {
+    const text = answerText(value);
+    return input.choices ? input.choices.get(text) : text;
+  };
   if ('eq' in expr) {
-    const value = typeof expr.eq === 'boolean' ? expr.eq ? 'yes' : 'no' : String(expr.eq);
-    const encoded = input.choices ? input.choices.get(value) : value;
+    const encoded = encode(expr.eq);
     return encoded === undefined ? 'false()' : `(${ref} != '' and ${ref} = ${quote(encoded)})`;
   }
-  return `(number(${ref}) ${'gte' in expr ? `>= ${expr.gte}` : `< ${expr.lt}`})`;
+  if ('neq' in expr) {
+    const encoded = encode(expr.neq);
+    return encoded === undefined ? `(${ref} != '')` : `(${ref} != '' and ${ref} != ${quote(encoded)})`;
+  }
+  if ('in' in expr) {
+    const values = expr.in.map(encode).filter(value => value !== undefined);
+    return values.length ? `(${ref} != '' and (${values.map(value => `${ref} = ${quote(value)}`).join(' or ')}))` : 'false()';
+  }
+  const [symbol, limit] = numericLimit(expr);
+  return `(number(${ref}) ${symbol} ${limit})`;
+}
+
+/** The same logic as a JavaScript condition, for the stored preview program. */
+export function expression(expr) {
+  if ('otherwise' in expr) return 'true';
+  if ('all' in expr) return '(' + expr.all.map(expression).join('&&') + ')';
+  if ('any' in expr) return '(' + expr.any.map(expression).join('||') + ')';
+  if ('not' in expr) return `!(${expression(expr.not)})`;
+  const a = `a[${JSON.stringify(expr.input)}]`;
+  const text = `(${a}===true?'yes':${a}===false?'no':String(${a}))`;
+  if ('eq' in expr) return `(${a}!==undefined&&${text}===${JSON.stringify(answerText(expr.eq))})`;
+  if ('neq' in expr) return `(${a}!==undefined&&${text}!==${JSON.stringify(answerText(expr.neq))})`;
+  if ('in' in expr) return `(${a}!==undefined&&${JSON.stringify(expr.in.map(answerText))}.includes(${text}))`;
+  const [symbol, limit] = numericLimit(expr);
+  return `(typeof ${a}==='number'&&${a}${symbol}${limit})`;
 }
 
 export function chtSources(model) {

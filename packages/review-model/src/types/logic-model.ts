@@ -27,13 +27,22 @@ export interface LogicInput {
   choices?: string[];
 }
 
-/** eq: "is exactly" (or "is" for yes/no and choices); gte: "is at least"; lt: "is less than". */
-export type Comparison = 'eq' | 'gte' | 'lt';
+/** The comparisons the hand-edit form offers. */
+export type Comparison = 'eq' | 'gte' | 'gt' | 'lte' | 'lt';
+
+/** Every comparison in the shared @vera/schemas LogicModel. */
+export type LeafOp = Comparison | 'neq' | 'in';
+
+export type LeafValue = string | number | boolean | (string | number)[];
 
 export type LeafCondition =
   | { input: string; eq: string | number | boolean }
+  | { input: string; neq: string | number | boolean }
   | { input: string; gte: number }
-  | { input: string; lt: number };
+  | { input: string; gt: number }
+  | { input: string; lte: number }
+  | { input: string; lt: number }
+  | { input: string; in: (string | number)[] };
 
 export type Expr = { all: Expr[] } | { any: Expr[] } | { not: Expr } | { otherwise: true } | LeafCondition;
 
@@ -91,6 +100,11 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   home_care_advice: 'Give home care advice',
 };
 
+/** Actions the shared schema allows but the hand-edit form does not offer. */
+const OTHER_ACTION_LABELS: Record<string, string> = {
+  follow_up: 'Schedule a follow-up visit',
+};
+
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   integer: 'A whole number (for example, breaths per minute)',
   decimal: 'A number with decimals (for example, temperature)',
@@ -100,6 +114,8 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
 
 export const COMPARISON_LABELS: Record<Comparison, string> = {
   gte: 'is at least',
+  gt: 'is more than',
+  lte: 'is at most',
   lt: 'is less than',
   eq: 'is exactly',
 };
@@ -111,16 +127,15 @@ export function isNumberType(type: InputType): boolean {
 /** The label for an action, or undefined if this UI does not know the action. */
 export function actionLabel(action: unknown): string | undefined {
   if (typeof action !== 'string') return undefined;
-  return Object.prototype.hasOwnProperty.call(ACTION_LABELS, action)
-    ? ACTION_LABELS[action as ActionKind]
-    : undefined;
+  if (Object.prototype.hasOwnProperty.call(ACTION_LABELS, action)) return ACTION_LABELS[action as ActionKind];
+  return Object.prototype.hasOwnProperty.call(OTHER_ACTION_LABELS, action) ? OTHER_ACTION_LABELS[action] : undefined;
 }
 
 export type ParsedExpr =
   | { kind: 'all' | 'any'; items: unknown[] }
   | { kind: 'not'; item: unknown }
   | { kind: 'otherwise' }
-  | { kind: 'leaf'; input: string; op: Comparison; value: string | number | boolean }
+  | { kind: 'leaf'; input: string; op: LeafOp; value: LeafValue }
   | { kind: 'invalid' };
 
 /**
@@ -143,17 +158,19 @@ export function parseExpr(expr: unknown): ParsedExpr {
 
   if (keys.length === 2 && typeof record.input === 'string') {
     const input = record.input as string;
-    if ('eq' in record) {
-      const value = record.eq;
+    for (const op of ['eq', 'neq'] as const) {
+      const value = record[op];
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        return { kind: 'leaf', input, op: 'eq', value };
+        return { kind: 'leaf', input, op, value };
       }
     }
-    if (typeof record.gte === 'number' && Number.isFinite(record.gte)) {
-      return { kind: 'leaf', input, op: 'gte', value: record.gte };
+    for (const op of ['gte', 'gt', 'lte', 'lt'] as const) {
+      const value = record[op];
+      if (typeof value === 'number' && Number.isFinite(value)) return { kind: 'leaf', input, op, value };
     }
-    if (typeof record.lt === 'number' && Number.isFinite(record.lt)) {
-      return { kind: 'leaf', input, op: 'lt', value: record.lt };
+    const list = record.in;
+    if (Array.isArray(list) && list.length > 0 && list.every((v) => typeof v === 'string' || typeof v === 'number')) {
+      return { kind: 'leaf', input, op: 'in', value: list as (string | number)[] };
     }
   }
   return { kind: 'invalid' };

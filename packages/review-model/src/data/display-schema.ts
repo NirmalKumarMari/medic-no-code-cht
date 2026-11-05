@@ -4,7 +4,11 @@ const primitive = z.union([z.string(), z.number().finite(), z.boolean()]);
 const expression: z.ZodType<Expr> = z.lazy(() =>
   z.union([
     z.object({ input: z.string(), eq: primitive }).strict(),
+    z.object({ input: z.string(), neq: primitive }).strict(),
     z.object({ input: z.string(), gte: z.number().finite() }).strict(),
+    z.object({ input: z.string(), gt: z.number().finite() }).strict(),
+    z.object({ input: z.string(), lte: z.number().finite() }).strict(),
+    z.object({ input: z.string(), in: z.array(z.union([z.string(), z.number().finite()])).min(1) }).strict(),
     z.object({ input: z.string(), lt: z.number().finite() }).strict(),
     z.object({ all: z.array(expression).min(1) }).strict(),
     z.object({ any: z.array(expression).min(1) }).strict(),
@@ -39,7 +43,7 @@ export const reviewDisplaySchema = z
           .object({
             id: z.string(),
             label: z.string(),
-            type: z.enum(["integer", "decimal", "yes_no", "select_one"]),
+            type: z.enum(["integer", "decimal", "yes_no", "select_one", "text"]),
             choices: z.array(z.string()).optional(),
             options: z.array(z.string()).optional(),
           })
@@ -58,6 +62,7 @@ export const reviewDisplaySchema = z
                   "refer_urgently",
                   "treat_at_home",
                   "home_care_advice",
+                  "follow_up",
                 ]),
               })
               .strict(),

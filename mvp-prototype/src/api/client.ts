@@ -9,7 +9,7 @@ export interface Session {
   storage: "local" | "aws";
 }
 export interface AuthConfig {
-  mode: "local" | "cognito" | "demo";
+  mode: "local" | "cognito" | "demo" | "password";
   pipeline?: boolean;
   domain?: string;
   clientId?: string;
@@ -137,6 +137,11 @@ export async function api<T>(
   }
   return data;
 }
+/** TEMPORARY demo sign-in; see components/SignIn.tsx. */
+export async function signInWithPassword(email: string, password: string) {
+  const result = await api<{ token: string }>("auth/sign-in", { email, password });
+  sessionStorage.setItem("vera-access-token", result.token);
+}
 export function authConfig() {
   return api<AuthConfig>("auth/config");
 }
@@ -217,12 +222,13 @@ export function signOut(config: AuthConfig) {
       logout_uri: `${location.origin}${import.meta.env.BASE_URL}`,
     }).toString();
     location.assign(url);
-  } else location.reload();
+  } else location.assign(import.meta.env.BASE_URL);
 }
 
 function fileHeaders() {
   const token = sessionStorage.getItem("vera-access-token");
   return {
+    "X-Demo-Persona": sessionStorage.getItem("vera-preview-persona") ?? "program_officer",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(tenant ? { "X-Tenant-Id": tenant } : {}),
   };
@@ -265,6 +271,50 @@ export async function uploadPdf(input: {
   if (!response.ok) return fileError(response);
   return response.json();
 }
+export interface PipelineSummary {
+  changeId: string;
+  status: string;
+  state?: string;
+  startedAt?: string;
+}
+export interface PipelineRun extends PipelineSummary {
+  title?: string;
+  stage?: string;
+  error?: string;
+  snapshotHash?: string;
+  buildId?: string;
+  artifactDigest?: string;
+  releaseReady?: boolean;
+  chtProjectReady?: boolean;
+  historyFlags?: { id: string; ruleId: string; notesExcerpt: string }[];
+  testSummary?: {
+    passed: boolean;
+    coveredBranches: number;
+    branchCount: number;
+    passedGoldenCases: number;
+    goldenCaseCount: number;
+  };
+}
+export async function downloadRunFile(
+  changeId: string,
+  file: "cht-project" | "release",
+  filename: string,
+) {
+  const response = await fetch(
+    `${import.meta.env.BASE_URL}api/pipeline/${changeId}/${file}`,
+    { headers: fileHeaders(), credentials: "same-origin", signal: AbortSignal.timeout(60_000) },
+  );
+  if (!response.ok) return fileError(response);
+  saveBlob(await response.blob(), filename);
+}
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 export async function downloadPdf(
   documentId: string,
   revisionId: string,
@@ -279,10 +329,5 @@ export async function downloadPdf(
     },
   );
   if (!response.ok) return fileError(response);
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(await response.blob(), filename);
 }

@@ -1,6 +1,6 @@
 // Plain-language wording for the logic, shared by the flowchart, table and checks.
 
-import type { Comparison, FollowUp, LogicInput } from '../types/logic-model.js';
+import type { Comparison, FollowUp, LeafOp, LeafValue, LogicInput } from '../types/logic-model.js';
 import { COMPARISON_LABELS, isNumberType } from '../types/logic-model.js';
 import type { Patient } from './evaluate.js';
 
@@ -12,21 +12,22 @@ export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function answerText(op: Comparison, value: string | number | boolean, input: LogicInput | undefined): string {
-  if (input && isNumberType(input.type)) {
-    return `${COMPARISON_LABELS[op].replace(/^is /, '')} ${value}`;
-  }
+function plainAnswer(value: string | number | boolean, input: LogicInput | undefined): string {
   if (input?.type === 'yes_no') return value === 'yes' || value === true ? 'Yes' : 'No';
   return String(value);
 }
 
-/** For example "Breaths per minute: at least 50" or "Any danger sign present? Yes". */
-export function describeLeaf(
-  inputId: string,
-  op: Comparison,
-  value: string | number | boolean,
-  inputs: LogicInput[],
-): string {
+function answerText(op: LeafOp, value: LeafValue, input: LogicInput | undefined): string {
+  if (Array.isArray(value)) return `one of: ${value.map((v) => plainAnswer(v, input)).join(', ')}`;
+  if (op === 'neq') return `not ${plainAnswer(value, input)}`;
+  if (input && isNumberType(input.type)) {
+    return `${COMPARISON_LABELS[op as Comparison].replace(/^is /, '')} ${value}`;
+  }
+  return plainAnswer(value, input);
+}
+
+/** For example "Breaths per minute: more than 60" or "Any danger sign present? Yes". */
+export function describeLeaf(inputId: string, op: LeafOp, value: LeafValue, inputs: LogicInput[]): string {
   const input = inputs.find((i) => i.id === inputId);
   const label = input?.label ?? `Unknown question (${inputId})`;
   const answer = answerText(op, value, input);

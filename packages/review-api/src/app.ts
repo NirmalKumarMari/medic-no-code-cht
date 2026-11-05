@@ -8,6 +8,7 @@ import {
   type Item,
 } from "@vera/workflow-data";
 import { HttpError, type Authenticate } from "./auth.js";
+import { signInSchema } from "./demo-sign-in.js";
 import { HistoryService } from "./history.js";
 import { DocumentsService } from "./documents.js";
 import { ReviewService, draftSummary, safeEvent } from "./service.js";
@@ -19,7 +20,9 @@ export interface AppOptions {
   authenticate: Authenticate;
   mode: "local" | "aws";
   origins: string[];
-  authConfig: { mode: "local" | "cognito" | "demo"; pipeline?: boolean; domain?: string; clientId?: string };
+  authConfig: { mode: "local" | "cognito" | "demo" | "password"; pipeline?: boolean; domain?: string; clientId?: string };
+  /** TEMPORARY: see demo-sign-in.ts. */
+  signIn?: (email: string, password: string) => Promise<string>;
 }
 function encode(cursor?: Item) {
   return cursor
@@ -239,6 +242,12 @@ export function createApp(o: AppOptions) {
   });
   app.get("/healthz", async () => ({ status: "ok", storage: o.mode }));
   app.get("/api/auth/config", async () => o.authConfig);
+  const { signIn } = o;
+  if (signIn)
+    app.post("/api/auth/sign-in", async (request) => {
+      const { email, password } = signInSchema.parse(request.body);
+      return { token: await signIn(email, password) };
+    });
   app.get("/api/session", async (request) => {
     const p = await o.authenticate(request);
     return {

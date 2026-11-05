@@ -15,6 +15,7 @@ import {
 import { z } from "zod";
 import { createApp } from "./app.js";
 import { cognitoAuthenticator, HttpError, type Authenticate } from "./auth.js";
+import { DemoSignIn } from "./demo-sign-in.js";
 import { LocalArtifacts, type ArtifactIO } from "./artifacts.js";
 import { HistoryService } from "./history.js";
 import { DocumentsService } from "./documents.js";
@@ -70,15 +71,20 @@ let artifacts: ArtifactIO;
 let authenticate: Authenticate;
 let screen: (text: string) => Promise<void>;
 let authConfig: Parameters<typeof createApp>[0]["authConfig"];
+// TEMPORARY: see demo-sign-in.ts.
+const demoSignIn =
+  env.REVIEW_AUTH_MODE === "password"
+    ? new DemoSignIn(JSON.parse(required("REVIEW_DEMO_ACCOUNTS")))
+    : undefined;
 if (mode === "local") {
   artifacts = new LocalArtifacts(
     resolve(env.REVIEW_LOCAL_ARTIFACT_DIR ?? ".local/review-artifacts"),
   );
-  authenticate = async () => ({
+  authenticate = demoSignIn?.authenticate ?? (async () => ({
     subject: "local-program-officer",
     groups: ["program_officer"],
     tenants: ["local-workshop"],
-  });
+  }));
   screen = async (text) => {
     if (/AKIA[A-Z0-9]{16}|-----BEGIN .*PRIVATE KEY-----/i.test(text))
       throw new HttpError(
@@ -87,7 +93,7 @@ if (mode === "local") {
         "Remove credential-like text before saving",
       );
   };
-  authConfig = { mode: "local" };
+  authConfig = demoSignIn ? { mode: "password", ...(previewArn ? { pipeline: true } : {}) } : { mode: "local" };
 } else {
   const bucket = required("WORKFLOW_ARTIFACT_BUCKET");
   artifacts = new ArtifactStore(
@@ -95,8 +101,11 @@ if (mode === "local") {
     bucket,
     required("KMS_KEY_ARN"),
   );
-  const authMode = z.enum(["cognito", "demo"]).parse(env.REVIEW_AUTH_MODE ?? "demo");
-  if (authMode === "demo") {
+  const authMode = z.enum(["cognito", "demo", "password"]).parse(env.REVIEW_AUTH_MODE ?? "demo");
+  if (demoSignIn) {
+    authenticate = demoSignIn.authenticate;
+    authConfig = { mode: "password", ...(previewArn ? { pipeline: true } : {}) };
+  } else if (authMode === "demo") {
     const tenant = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/).parse(env.REVIEW_DEMO_TENANT ?? "workshop-049197632966");
     authenticate = async (request) => {
       const persona = previewArn ? request.headers["x-demo-persona"] : undefined;
@@ -175,7 +184,7 @@ const origins = (
 const documentRepository = new DocumentRepository(client, tables);
 const documents = new DocumentsService(documentRepository, artifacts, screen);
 const pipeline = previewArn ? new PipelineService(new SFNClient({ region }), previewArn, workflow, documentRepository, artifacts, screen) : undefined;
-const app = createApp({ service, documents, history: new HistoryService(workflow, artifacts), pipeline, authenticate, mode, origins, authConfig });
+const app = createApp({ service, documents, history: new HistoryService(workflow, artifacts), pipeline, authenticate, mode, origins, authConfig, signIn: demoSignIn?.signIn });
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, async () => {
     await app.close();

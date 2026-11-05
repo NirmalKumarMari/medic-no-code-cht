@@ -38,7 +38,7 @@ export const requirementsSchema = z
                   .object({
                     key,
                     questionKey: key,
-                    op: z.enum(["eq", "gte", "lt"]),
+                    op: z.enum(["eq", "gte", "gt", "lte", "lt"]),
                     value: z.string().max(200),
                   })
                   .strict(),

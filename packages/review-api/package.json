@@ -9,7 +9,8 @@
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "local:setup": "tsx scripts/setup-local.ts"
+    "local:setup": "tsx scripts/setup-local.ts",
+    "demo:accounts": "tsx scripts/make-demo-accounts.ts"
   },
   "dependencies": {
     "@vera/review-model": "0.1.0",

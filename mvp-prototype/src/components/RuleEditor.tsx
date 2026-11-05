@@ -9,7 +9,7 @@ import { SelectField, TextField } from './fields';
 // what the health worker should do, an optional follow-up, and a guideline
 // reference. Rules can be reordered because the first match wins.
 
-const COMPARISON_OPTIONS = (['gte', 'lt', 'eq'] as Comparison[]).map((value) => ({
+const COMPARISON_OPTIONS = (['gte', 'gt', 'lte', 'lt', 'eq'] as Comparison[]).map((value) => ({
   value,
   label: COMPARISON_LABELS[value],
 }));
@@ -77,7 +77,7 @@ export default function RuleEditor({
           <span aria-hidden="true">↓ </span>Move down<span className="sr-only"> rule {n}</span>
         </button>
         {total > 1 && (
-          <button type="button" className="btn-link" onClick={onRemove}>
+          <button type="button" className="btn-link btn-link-danger" onClick={onRemove}>
             Remove<span className="sr-only"> rule {n}</span>
           </button>
         )}
@@ -157,7 +157,7 @@ export default function RuleEditor({
                   />
                 )}
                 {rule.conditions.length > 1 && (
-                  <button type="button" className="btn-link condition-remove" onClick={() => onRemoveCondition(c.key)}>
+                  <button type="button" className="btn-link btn-link-danger condition-remove" onClick={() => onRemoveCondition(c.key)}>
                     Remove<span className="sr-only"> condition {ci + 1} from rule {n}</span>
                   </button>
                 )}
@@ -191,7 +191,7 @@ export default function RuleEditor({
             <span className="optional">(optional)</span>
           </>
         }
-        hint="Section name or page. In the full system, the AI adds this from the guideline."
+        hint="Section name or page"
         value={rule.source}
         onChange={(v) => onChange({ source: v })}
       />

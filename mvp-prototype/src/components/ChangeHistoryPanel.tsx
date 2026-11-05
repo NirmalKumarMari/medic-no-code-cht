@@ -1,15 +1,143 @@
-import { useEffect,useState } from 'react';
-import {api} from '../api/client';
-interface Change {changeId:string;pathwayId:string;state:string;snapshotHash:string;updatedAt:string}
-interface History {current:Change;snapshots:{snapshotId:string;snapshotHash:string;parentSnapshotHash:string|null;authorId:string;origin:string;designation:string;integrity:string}[];decisions:Record<string,unknown>[];events:Record<string,unknown>[];builds:Record<string,unknown>[];tests:Record<string,unknown>[];referrals:Record<string,unknown>[];requests:Record<string,unknown>[];incompleteSources:string[]}
-export default function ChangeHistoryPanel(){
- const [items,setItems]=useState<Change[]>([]);const [history,setHistory]=useState<History>();const [error,setError]=useState('');const [busy,setBusy]=useState(false);
- const fail=(e:unknown)=>setError(e instanceof Error?e.message:'History could not be loaded.');
- async function refresh(){setBusy(true);setError('');try{setItems((await api<{items:Change[]}>('changes')).items);}catch(e){fail(e);}finally{setBusy(false);}}
- useEffect(()=>{let active=true;void api<{items:Change[]}>('changes').then(p=>{if(active)setItems(p.items);}).catch(e=>{if(active)fail(e);});return()=>{active=false;};},[]);
- return <section className="card" aria-labelledby="history-heading"><h2 id="history-heading">Pipeline changes and history</h2><p>Read-only history of registered workflow snapshots, checks, decisions and builds.</p>{error&&<p role="alert" className="notice notice-error">{error}</p>}<button className="btn-link" disabled={busy} onClick={()=>void refresh()}>Refresh pipeline changes</button>{!items.length&&!error&&<p>No registered pipeline changes yet. Saved authoring drafts appear in the draft list.</p>}<ul>{items.map(c=><li key={c.changeId}><button className="btn-link" disabled={busy} onClick={()=>{setBusy(true);setError('');void api<History>(`changes/${c.changeId}/history`).then(setHistory).catch(fail).finally(()=>setBusy(false));}}>{c.pathwayId} — {c.state} — {c.changeId}</button></li>)}</ul>
- {history&&<div><h3>Change {history.current.changeId}</h3><p>Current state: {history.current.state}</p><p>Current snapshot: <code className="snapshot-hash">{history.current.snapshotHash}</code></p>{history.incompleteSources.length>0&&<p role="alert" className="notice notice-error">History is incomplete. Unreadable sources: {history.incompleteSources.join(', ')}.</p>}
- <h3>Snapshots</h3>{!history.snapshots.length&&<p>No snapshot records available.</p>}<ul>{history.snapshots.map(s=><li key={s.snapshotId}><strong>{s.snapshotId}</strong><p>Hash: <code className="snapshot-hash">{s.snapshotHash}</code></p><p>Author: {s.authorId} · Origin: {s.origin} · Designation: {s.designation}</p><p>{s.parentSnapshotHash?<>Parent: <code className="snapshot-hash">{s.parentSnapshotHash}</code></>:'No parent snapshot.'}</p><p>Integrity: {s.integrity}</p></li>)}</ul>
- {([['State and audit timeline',history.events],['Human decisions',history.decisions],['Build records',history.builds],['Test records',history.tests],['Clinician referrals',history.referrals],['Pipeline requests',history.requests]] as const).map(([label,records])=><section key={label}><h3>{label}</h3>{!records.length?<p>No records available.</p>:<ol>{records.map((record,i)=><li key={i}><pre>{JSON.stringify(record,null,2)}</pre></li>)}</ol>}</section>)}
- </div>}</section>;
+import { useEffect, useState } from "react";
+import { api } from "../api/client";
+import { plainWords } from "../data/status";
+import StatusPill from "./StatusPill";
+
+// Read-only record of each change. What happened comes first; identifiers and
+// stored records stay behind "Technical details".
+
+export interface Change {
+  changeId: string;
+  pathwayId: string;
+  state: string;
+  snapshotHash: string;
+  updatedAt: string;
+}
+type StoredRecord = Record<string, unknown>;
+interface History {
+  current: Change;
+  snapshots: {
+    snapshotId: string;
+    snapshotHash: string;
+    parentSnapshotHash: string | null;
+    authorId: string;
+    origin: string;
+    designation: string;
+    integrity: string;
+  }[];
+  decisions: StoredRecord[];
+  events: StoredRecord[];
+  builds: StoredRecord[];
+  tests: StoredRecord[];
+  referrals: StoredRecord[];
+  requests: StoredRecord[];
+  incompleteSources: string[];
+}
+
+function formatTime(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const time = new Date(value);
+  return Number.isNaN(time.getTime()) ? value : time.toLocaleString();
+}
+
+function recordTitle(record: StoredRecord): string {
+  const name = record.decision ?? record.type ?? record.event ?? record.state;
+  return typeof name === "string" ? plainWords(name) : "Update";
+}
+
+export default function ChangeHistoryPanel({ initialChangeId }: { initialChangeId?: string }) {
+  const [items, setItems] = useState<Change[]>([]);
+  const [history, setHistory] = useState<History>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fail = (e: unknown) =>
+    setError(e instanceof Error ? e.message : "History couldn't be loaded. Try again.");
+
+  function open(changeId: string) {
+    setBusy(true);
+    setError("");
+    void api<History>(`changes/${changeId}/history`)
+      .then(setHistory)
+      .catch(fail)
+      .finally(() => setBusy(false));
+  }
+
+  useEffect(() => {
+    let active = true;
+    void api<{ items: Change[] }>("changes")
+      .then((p) => {
+        if (active) setItems(p.items);
+      })
+      .catch((e) => {
+        if (active) fail(e);
+      });
+    if (initialChangeId) open(initialChangeId);
+    return () => {
+      active = false;
+    };
+    // Runs once per panel; the parent remounts it for a different change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const timeline = history
+    ? [...history.decisions, ...history.events, ...history.builds, ...history.tests, ...history.referrals, ...history.requests]
+        .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")))
+    : [];
+
+  return (
+    <section className="card" aria-labelledby="history-heading">
+      <h2 id="history-heading">History</h2>
+      {error && (
+        <p role="alert" className="notice notice-error">
+          {error}
+        </p>
+      )}
+      {!items.length && !error && <p className="empty">Nothing here yet.</p>}
+      {items.length > 0 && (
+        <ul className="row-list">
+          {items.map((c) => (
+            <li key={c.changeId}>
+              <button className="row" disabled={busy} onClick={() => open(c.changeId)}>
+                <span className="row-title">{plainWords(c.pathwayId)}</span>
+                <StatusPill state={c.state} />
+                <span className="row-meta">{formatTime(c.updatedAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {history && (
+        <div className="history-detail">
+          <h3>{plainWords(history.current.pathwayId)}</h3>
+          <p>
+            Status: <StatusPill state={history.current.state} />
+          </p>
+          {history.incompleteSources.length > 0 && (
+            <p role="alert" className="notice notice-error">
+              Part of this history couldn't be loaded, so it may be incomplete.
+            </p>
+          )}
+          {!timeline.length && <p className="empty">No activity recorded yet.</p>}
+          {timeline.length > 0 && (
+            <ol className="history-list">
+              {timeline.map((record, i) => (
+                <li key={i}>
+                  <strong>{recordTitle(record)}</strong>{" "}
+                  <span className="row-meta">{formatTime(record.createdAt)}</span>
+                  {typeof record.notes === "string" && record.notes && <p>{record.notes}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
+          <details className="json-details">
+            <summary>Technical details</summary>
+            <p className="version-id">
+              Version ID: <code>{history.current.snapshotHash}</code>
+            </p>
+            <pre>{JSON.stringify({ snapshots: history.snapshots, records: timeline }, null, 2)}</pre>
+          </details>
+        </div>
+      )}
+    </section>
+  );
 }

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import type { ConditionDraft, Notice, QuestionDraft, RequirementsDraft, RuleDraft } from '../types/draft';
 import type { QuestionType } from '../types/logic-model';
 import { QUESTION_TYPE_LABELS, isNumberType } from '../types/logic-model';
-import { emptyCondition, emptyDraft, emptyQuestion, emptyRule, exampleDraft, hasContent } from '../data/drafts';
+import { emptyCondition, emptyDraft, emptyQuestion, emptyRule } from '../data/drafts';
 import { validateDraft } from '../data/validate';
 import ErrorSummary from './ErrorSummary';
 import OutcomeFields from './OutcomeFields';
@@ -28,9 +28,10 @@ interface Props {
   initial?: RequirementsDraft;
   notice?: Notice;
   onGenerate: (draft: RequirementsDraft) => void;
+  submitLabel?: string;
 }
 
-export default function RequirementsForm({ initial, notice, onGenerate }: Props) {
+export default function RequirementsForm({ initial, notice, onGenerate, submitLabel = "Save" }: Props) {
   const [draft, setDraft] = useState<RequirementsDraft>(() => initial ?? emptyDraft());
   const [attempted, setAttempted] = useState(false);
   const [failedSubmits, setFailedSubmits] = useState(0);
@@ -150,13 +151,6 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
     setFocusId(`r-${ruleKey}-add-condition`);
   }
 
-  function fillExample() {
-    if (hasContent(draft) && !window.confirm('Replace what you have entered with the example?')) return;
-    setDraft(exampleDraft());
-    setAttempted(false);
-    setStatus('Example filled in. Check it, then choose Save draft and show flowchart.');
-  }
-
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setAttempted(true);
@@ -185,27 +179,16 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
               ))}
             </ul>
           )}
-          <p className="hint">Change the answers below, then generate a new version.</p>
+          <p className="hint">Make your changes below, then save.</p>
         </div>
       )}
 
       {errors.length > 0 && <ErrorSummary ref={summaryRef} errors={errors} />}
 
-      <div className="card intro">
-        <p>
-          Describe the pathway the way you would explain it to a colleague. Fields marked * are required.
-        </p>
-        <div className="intro-row">
-          <p>Want to see how it works first?</p>
-          <button type="button" className="btn-secondary" onClick={fillExample}>
-            Fill in an example
-          </button>
-        </div>
-        <p className="hint">The example is illustrative only. It is not clinical guidance.</p>
-      </div>
+      <p className="hint">Fields marked * are required. Use public guidelines only, and don't include patient information.</p>
 
       <section className="card" aria-labelledby="pathway-heading">
-        <h3 id="pathway-heading">1. Pathway</h3>
+        <h3 id="pathway-heading">Pathway</h3>
         <TextField
           id="pathway"
           label="Pathway name"
@@ -241,8 +224,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
       </section>
 
       <section className="card" aria-labelledby="questions-heading">
-        <h3 id="questions-heading">2. Questions the health worker answers</h3>
-        <p className="hint">These become the questions in the form on the health worker's phone.</p>
+        <h3 id="questions-heading">Questions</h3>
         {draft.questions.map((q, i) => {
           const n = i + 1;
           return (
@@ -290,7 +272,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
                 />
               )}
               {draft.questions.length > 1 && (
-                <button type="button" className="btn-link" onClick={() => removeQuestion(q.key, n)}>
+                <button type="button" className="btn-link btn-link-danger" onClick={() => removeQuestion(q.key, n)}>
                   Remove<span className="sr-only"> question {n}</span>
                 </button>
               )}
@@ -303,11 +285,8 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
       </section>
 
       <section className="card" aria-labelledby="rules-heading">
-        <h3 id="rules-heading">3. Rules</h3>
-        <p className="hint">
-          Rules are checked from top to bottom, and the first rule that matches decides what happens. Put the most
-          serious rules first.
-        </p>
+        <h3 id="rules-heading">Rules</h3>
+        <p className="hint">Checked from top to bottom. The first match decides, so put the most serious rules first.</p>
         {draft.rules.map((r, i) => (
           <RuleEditor
             key={r.key}
@@ -330,9 +309,8 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
       </section>
 
       <section className="card" aria-labelledby="otherwise-heading">
-        <h3 id="otherwise-heading">4. If no rule matches</h3>
-        <p className="hint">This catch-all makes sure every patient gets an outcome.</p>
-        <OutcomeFields
+        <h3 id="otherwise-heading">If no rule matches</h3>
+                <OutcomeFields
           idPrefix="otherwise"
           context="If no rule matches"
           value={draft.otherwise}
@@ -346,7 +324,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
               Where is this in the guideline? <span className="optional">(optional)</span>
             </>
           }
-          hint="Section name or page. In the full system, the AI adds this from the guideline."
+          hint="Section name or page"
           value={draft.otherwiseSource}
           onChange={(v) => update({ otherwiseSource: v })}
         />
@@ -354,7 +332,7 @@ export default function RequirementsForm({ initial, notice, onGenerate }: Props)
 
       <div className="button-bar">
         <button type="submit" className="btn">
-          Save draft and show flowchart
+          {submitLabel}
         </button>
       </div>
     </form>

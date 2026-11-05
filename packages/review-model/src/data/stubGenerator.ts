@@ -48,9 +48,7 @@ export function buildLogicModel(draft: RequirementsDraft, version: number): Logi
       const input = inputsByKey.get(c.questionKey);
       const id = input?.id ?? 'unknown';
       if (input && isNumberType(input.type)) {
-        const value = Number(c.value);
-        if (c.op === 'gte') return { input: id, gte: value };
-        return c.op === 'lt' ? { input: id, lt: value } : { input: id, eq: value };
+        return { input: id, [c.op]: Number(c.value) } as LeafCondition;
       }
       return { input: id, eq: c.value.trim() };
     });

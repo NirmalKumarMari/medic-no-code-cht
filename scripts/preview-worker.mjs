@@ -1,4 +1,4 @@
-import { compileChtProject } from './preview-cht.mjs';
+import { compileChtProject, expression } from './preview-cht.mjs';
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -91,18 +91,6 @@ function displayModel(row, raw) {
     pathway: typeof raw.pathway === 'string' ? { id: row.pathwayId, title: raw.pathway } : raw.pathway,
     inputs: raw.inputs.map(input => ({ ...input, ...(input.options && !input.choices ? { choices: input.options } : {}) })),
   });
-}
-function expression(expr) {
-  if ('otherwise' in expr) return 'true';
-  if ('all' in expr) return '(' + expr.all.map(expression).join('&&') + ')';
-  if ('any' in expr) return '(' + expr.any.map(expression).join('||') + ')';
-  if ('not' in expr) return `!(${expression(expr.not)})`;
-  const a = `a[${JSON.stringify(expr.input)}]`;
-  if ('eq' in expr) {
-    const v = typeof expr.eq === 'boolean' ? expr.eq ? 'yes' : 'no' : String(expr.eq);
-    return `(${a}!==undefined&&(${a}===true?'yes':${a}===false?'no':String(${a}))===${JSON.stringify(v)})`;
-  }
-  return `(typeof ${a}==='number'&&${a}${'gte' in expr ? `>=${expr.gte}` : `<${expr.lt}`})`;
 }
 function compile(model) {
   const cases = model.rules.map(rule => `if (${expression(rule.when)}) return ${JSON.stringify({ id: rule.id, action: rule.then.action, followUp: rule.followUp ?? null })};`);

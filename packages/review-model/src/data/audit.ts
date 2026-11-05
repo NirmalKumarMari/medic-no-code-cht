@@ -29,17 +29,21 @@ function auditExpr(expr: unknown, name: string, inputs: Map<string, LogicInput>,
         return;
       }
       const { op, value } = parsed;
+      const values = Array.isArray(value) ? value : [value];
       const label = `"${input.label}"`;
       if (isNumberType(input.type)) {
-        if (typeof value !== 'number') problems.push(`${name} compares the number question ${label} to "${value}".`);
-      } else if (op !== 'eq') {
+        const bad = values.find((v) => typeof v !== 'number');
+        if (bad !== undefined) problems.push(`${name} compares the number question ${label} to "${bad}".`);
+      } else if (op === 'gte' || op === 'gt' || op === 'lte' || op === 'lt') {
         problems.push(`${name} uses a number comparison on ${label}, which is not a number question.`);
       } else if (input.type === 'yes_no') {
-        if (!['yes', 'no', true, false].includes(value as string | boolean)) {
-          problems.push(`${name} expects "${value}" from the yes or no question ${label}.`);
-        }
-      } else if (input.type === 'select_one' && !input.choices?.includes(String(value))) {
-        problems.push(`${name} expects "${value}", which is not one of the choices for ${label}.`);
+        const bad = values.find((v) => !['yes', 'no', true, false].includes(v as string | boolean));
+        if (bad !== undefined) problems.push(`${name} expects "${bad}" from the yes or no question ${label}.`);
+      } else if (input.type === 'select_one') {
+        const bad = values.find((v) => !input.choices?.includes(String(v)));
+        if (bad !== undefined) problems.push(`${name} expects "${bad}", which is not one of the choices for ${label}.`);
+      } else if (input.type !== 'text') {
+        problems.push(`${name} reads ${label}, whose answer type this screen cannot show ("${input.type}").`);
       }
     }
   }

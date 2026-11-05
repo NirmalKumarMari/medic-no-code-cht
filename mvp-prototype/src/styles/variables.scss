@@ -21,6 +21,10 @@
   --mm-warning-highlight: #FCF6E7;  // yellow-highlight
   --mm-teal-dark: #218E7F;          // teal-dark: "done" and "passed" borders
   --mm-teal-highlight: #E4EFEF;     // teal-highlight
+  --mm-success: #2E8540;            // green: approved and live labels
+  --mm-success-highlight: #DFF3E4;
+  --mm-success-text: #1B5E20;       // 6.4:1 or better on success-highlight
+  --mm-warning-text: #6F4400;       // darker amber for text on yellow-highlight
 
   // Text
   --mm-text: #333333;               // gray-ultra-dark

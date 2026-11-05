@@ -38,6 +38,18 @@ Use an authorized AWS SDK session/EC2 role. The artifact bucket must already be 
 
 The current default is shared demo access (`REVIEW_AUTH_MODE=demo`), with a fixed server-owned program officer in `REVIEW_DEMO_TENANT`. Storage remains AWS. Individual workflow decisions are disabled in demo mode.
 
+### Temporary password sign-in
+
+For demos only, `REVIEW_AUTH_MODE=password` gives each person their own identity and role without Cognito. It works with or without `REVIEW_PIPELINE_ARN`, and sessions end when the server restarts.
+
+```bash
+npm run demo:accounts --workspace @vera/review-api -- <tenant>
+```
+
+This writes two git-ignored files in this package: `.env.demo-sign-in` (settings for the server, with password hashes only) and `.env.demo-passwords` (the passwords to share with the team). Add the first to the server's `--env-file` options.
+
+To remove it, delete `src/demo-sign-in.ts`, `scripts/make-demo-accounts.ts`, `tests/demo-sign-in.test.ts` and `mvp-prototype/src/components/SignIn.tsx`. Then remove `demoSignIn` from `src/server.ts`, the `signIn` option and route from `src/app.ts`, the `demo:accounts` script, and `signInWithPassword` and the `password` mode from the UI.
+
 For individual sign-in, set `REVIEW_AUTH_MODE=cognito` and configure a Cognito **public app client without a client secret**, authorization-code grant with PKCE and `openid` scope. Register the exact UI URL, including its trailing slash and any workshop prefix, as both callback and sign-out URL. `COGNITO_DOMAIN` is the HTTPS hosted-login origin. The browser signs in with PKCE and keeps its access token in sessionStorage; the API verifies access-token signature, issuer, client, use and expiry using [AWS JWT Verify](https://github.com/awslabs/aws-jwt-verify). It derives the subject/groups from the verified token and permits only server-configured tenant memberships. The `X-Tenant-Id` header chooses among those memberships and cannot grant access.
 
 Set `REVIEW_ALLOWED_ORIGINS` to the exact trusted UI origins. Serve the UI and `/api` through one HTTPS reverse proxy, or use Session Manager port forwarding. `REVIEW_HOST` defaults to loopback. In workshop Vite mode, `/absproxy/5173/api` is also proxied. AWS mode never falls back to local storage and rejects a DynamoDB endpoint override.

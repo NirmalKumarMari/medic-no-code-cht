@@ -75,93 +75,68 @@ function condition(
   return { key: newKey("c"), questionKey, op, value };
 }
 
-function ruleWithFollowUp(
-  conditions: ConditionDraft[],
-  action: ActionKind,
-  dueInDays: string,
-  openForDays: string,
-  source = "",
-): RuleDraft {
+const REC_25 = "Executive summary, B. Newborn care, Recommendation 25, page 13";
+
+function dangerSign(conditions: ConditionDraft[]): RuleDraft {
   return {
     key: newKey("r"),
     conditions,
-    action,
-    followUp: true,
-    dueInDays,
-    openForDays,
-    source,
+    action: "refer_urgently" as ActionKind,
+    followUp: false,
+    dueInDays: "",
+    openForDays: "",
+    source: REC_25,
   };
 }
 
 /**
- * Illustrative example only, loosely based on the WHO IMCI cough and fast
- * breathing chart. It is not clinical guidance: real pathways and their golden
- * cases must be confirmed by a clinician (design doc section 20).
+ * Illustrative example only, based on WHO postnatal care 2022, Recommendation
+ * 25, matching the team's test data in testing/. It has not been reviewed by a
+ * clinician and is not clinical guidance.
  */
 export function exampleDraft(): RequirementsDraft {
   const age = newKey("q");
+  const feeding = newKey("q");
+  const convulsions = newKey("q");
   const breaths = newKey("q");
-  const danger = newKey("q");
+  const indrawing = newKey("q");
+  const moves = newKey("q");
+  const temperature = newKey("q");
+  const jaundice = newKey("q");
+  const palms = newKey("q");
+  const question = (key: string, label: string, type: QuestionDraft["type"]): QuestionDraft => ({
+    key,
+    label,
+    type,
+    choices: "",
+  });
   return {
-    pathway: "Child cough and fast breathing",
-    guidelineName: "WHO IMCI chart booklet",
-    guidelineVersion: "2014",
+    pathway: "Newborn danger signs at a postnatal visit",
+    guidelineName: "WHO recommendations on maternal and newborn care for a positive postnatal experience",
+    guidelineVersion: "2022",
     questions: [
-      {
-        key: age,
-        label: "Child's age in months",
-        type: "integer",
-        choices: "",
-      },
-      {
-        key: breaths,
-        label: "Breaths per minute",
-        type: "integer",
-        choices: "",
-      },
-      {
-        key: danger,
-        label: "Any danger sign present?",
-        type: "yes_no",
-        choices: "",
-      },
+      question(age, "Baby's age in hours", "integer"),
+      question(feeding, "Is the baby feeding well?", "yes_no"),
+      question(convulsions, "Has the baby had convulsions (fits)?", "yes_no"),
+      question(breaths, "Breaths per minute (count for one full minute)", "integer"),
+      question(indrawing, "Severe chest in-drawing?", "yes_no"),
+      question(moves, "Does the baby move on its own?", "yes_no"),
+      question(temperature, "Temperature (°C)", "decimal"),
+      question(jaundice, "Any yellow skin or eyes (jaundice)?", "yes_no"),
+      question(palms, "Yellow palms and soles?", "yes_no"),
     ],
     rules: [
-      ruleWithFollowUp(
-        [condition(danger, "eq", "yes")],
-        "refer_urgently",
-        "1",
-        "3",
-        "General danger signs",
-      ),
-      ruleWithFollowUp([condition(age, "lt", "2")], "refer_urgently", "1", "3"),
-      ruleWithFollowUp(
-        [
-          condition(age, "gte", "2"),
-          condition(age, "lt", "12"),
-          condition(breaths, "gte", "50"),
-        ],
-        "treat_at_home",
-        "3",
-        "3",
-      ),
-      ruleWithFollowUp(
-        [
-          condition(age, "gte", "12"),
-          condition(age, "lt", "60"),
-          condition(breaths, "gte", "40"),
-        ],
-        "treat_at_home",
-        "3",
-        "3",
-      ),
+      dangerSign([condition(feeding, "eq", "no")]),
+      dangerSign([condition(convulsions, "eq", "yes")]),
+      dangerSign([condition(breaths, "gt", "60")]),
+      dangerSign([condition(indrawing, "eq", "yes")]),
+      dangerSign([condition(moves, "eq", "no")]),
+      dangerSign([condition(temperature, "gt", "37.5")]),
+      dangerSign([condition(temperature, "lt", "35.5")]),
+      dangerSign([condition(jaundice, "eq", "yes"), condition(age, "lt", "24")]),
+      dangerSign([condition(palms, "eq", "yes")]),
     ],
-    otherwise: {
-      action: "home_care_advice",
-      followUp: false,
-      dueInDays: "",
-      openForDays: "",
-    },
-    otherwiseSource: "",
+    otherwise: { action: "home_care_advice", followUp: false, dueInDays: "", openForDays: "" },
+    otherwiseSource: REC_25,
   };
 }
