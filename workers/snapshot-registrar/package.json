@@ -1,0 +1,37 @@
+{
+  "name": "@vera/worker-snapshot-registrar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "Trusted worker that registers each drafted or planned snapshot: writes the immutable snapshot bundle to the artifact bucket and creates or revises the change in workflow-data, with the requesting program officer as author.",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit",
+    "start": "node dist/src/server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1161.0",
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/lib-dynamodb": "3.1161.0",
+    "@vera/artifact-storage": "0.1.0",
+    "@vera/schemas": "0.1.0",
+    "@vera/workflow-data": "0.1.0",
+    "fastify": "^5.0.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

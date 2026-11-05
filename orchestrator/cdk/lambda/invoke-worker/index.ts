@@ -58,7 +58,11 @@ export async function handler(event: InvokeWorkerEvent): Promise<unknown> {
     // A rejected token may have been rotated: drop it so the next attempt re-reads it.
     if (response.status === 401 && event.authSecretArn) tokenCache.delete(event.authSecretArn);
     const detail = typeof parsedBody === "string" ? parsedBody : JSON.stringify(parsedBody);
-    throw new Error(`Worker at ${event.workerUrl} returned ${response.status}: ${detail}`);
+    const error = new Error(`Worker at ${event.workerUrl} returned ${response.status}: ${detail}`);
+    // 503/429 mean "busy, try again": a distinct error name lets Step Functions
+    // retry only these, while every other failure still goes to its Catch.
+    if (response.status === 503 || response.status === 429) error.name = "WorkerBusy";
+    throw error;
   }
 
   return parsedBody;

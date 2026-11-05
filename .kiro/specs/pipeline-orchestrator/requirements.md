@@ -6,7 +6,13 @@ This spec covers the Pipeline_Orchestrator of the Vera Solution Design: the AWS 
 
 The spec also owns the loops in §6. A rejection or a plain-language edit produces a new Snapshot that re-enters at Logic checks, never at the Drafting agent (rule 3). An Agent_Failure stops the change and surfaces the error to a person, never a guess (rule 7). A build failure either forces a new snapshotHash and a new content approval, or rebuilds the same snapshotHash under the existing approval when the Hash_Inputs are unchanged (Decisions Log #7). Retries are bounded, and a preview Snapshot never reaches `deployed`. Rollback redeploys a prior tested, approved release Snapshot through the cht-deployer.
 
-Source: Solution Design §3, §5, §6, §11, §14, and §18.
+Source: Solution Design §3, §5, §6, §9, §11, §14, and §18.
+
+### Change log
+
+| Date | Change |
+|---|---|
+| 2026-11-04 | Removed the History_Check Pipeline_State, the Optional_State switch, the History_Check_Failure_Notice, and the dependency on the removed decision-memory-history-check spec (AgentCore Memory and the History_Check_Agent no longer exist; Solution Design Decisions Log #13, ADR-013). History_Flags now come from the deterministic Rejected_Rule_Check of the rejected-rule-check spec, run during Logic_Checks and again when Content_Approval opens. Removed criteria keep their numbers (marked *Removed*) so cross-references stay valid. |
 
 ### Dependencies
 
@@ -19,7 +25,7 @@ Source: Solution Design §3, §5, §6, §11, §14, and §18.
 | cht-config-compiler | Uses: compile of an approved snapshotHash and its Build_Failure_Category on failure. |
 | build-test-sandbox | Uses: build and synthetic-patient test of an approved snapshotHash, Build_Record, and Build_Failure_Category on failure. |
 | cht-deployer | Uses: deploy and verify of a Build_Record, redeploy for rollback, and the deployer's own release-only refusal. |
-| decision-memory-history-check (Should-Have) | Uses: the History_Check worker and its History_Flags when History_Check is enabled. Reads the Decision_Log written by this spec. |
+| rejected-rule-check | Uses: the History_Flags that the Rejected_Rule_Check returns during Logic_Checks and when Content_Approval opens. Provides: the Tenant and Execution identity, and the History_Flag identifiers to acknowledge at Deploy_Approval. |
 | platform-infrastructure | Provides: the State_Machine resource, the Changes, Approvals, Audit, and Tokens tables, the Artifact_Bucket, the services EC2 instance, and the IAM roles named in this spec. |
 
 ## Glossary
@@ -35,9 +41,8 @@ Terms reused from earlier specs keep the meaning defined there.
 - **Worker_API**: The internal API on the services EC2 instance through which the State_Machine calls each Pipeline_State's worker.
 - **Worker_Call_Id**: A unique identifier the State_Machine assigns to one worker call and reuses on every retry of that call.
 - **Review_UI**: The review UI and API defined in the review-ui-approvals spec.
-- **Pipeline_State**: One of the nine steps of the State_Machine, in this fixed order: Intake, Draft, Logic_Checks, Content_Approval, Compile, Build_Test, History_Check, Deploy_Approval, Deploy.
-- **Optional_State**: History_Check, enabled or disabled in the Pipeline_Configuration.
-- **Pipeline_Configuration**: The settings the Pipeline_Orchestrator reads at Execution start: the Optional_State switches, a Retry_Limit per Pipeline_State, the Rebuild_Limit, and the Deploy_Retry_Limit.
+- **Pipeline_State**: One of the eight steps of the State_Machine, in this fixed order: Intake, Draft, Logic_Checks, Content_Approval, Compile, Build_Test, Deploy_Approval, Deploy.
+- **Pipeline_Configuration**: The settings the Pipeline_Orchestrator reads at Execution start: a Retry_Limit per Pipeline_State, the Rebuild_Limit, and the Deploy_Retry_Limit.
 - **Retry_Limit**: The maximum number of automatic attempts of one worker call in one Pipeline_State.
 - **Rebuild_Limit**: The maximum number of automatic Tooling_Retries for one approved snapshotHash.
 - **Deploy_Retry_Limit**: The maximum number of automatic deploy or redeploy attempts for one Build_Record.
@@ -48,7 +53,7 @@ Terms reused from earlier specs keep the meaning defined there.
 - **Revision**: A new Snapshot for an existing changeId with Origin `human_edit` or `change_plan`, whose parent snapshotHash is the change's Current snapshotHash.
 - **Approval_Gate**: Content_Approval or Deploy_Approval.
 - **Parked_Token**: The Tokens table item for one Step Functions task token parked at one Approval_Gate, holding the changeId, the Approval_Gate, the snapshotHash, the Build_Record identifier for Deploy_Approval, the task token, and a consumed marker.
-- **Approval_Decision**: A decision submitted through the Review_UI at one Approval_Gate, holding the changeId, the Approval_Gate, the snapshotHash, the Build_Record identifier for Deploy_Approval, `approve` or `reject`, the approver identity, the approver Cognito group, a note, and, for Deploy_Approval, one acknowledgment per History_Flag.
+- **Approval_Decision**: A decision submitted through the Review_UI at one Approval_Gate, holding the changeId, the Approval_Gate, the snapshotHash, the Build_Record identifier for Deploy_Approval, `approve` or `reject`, the approver identity, the approver Cognito group, a note, and, for Deploy_Approval, one acknowledgment per History_Flag stored on the change.
 - **Decision_Recorder**: The State_Machine step, running under its own IAM role, that writes every Decision_Log entry.
 - **Open ambiguity Flag**: A Flag of type `ambiguity` that appears in the Flags listing of the Check_Report for the change's Current snapshotHash.
 - **Escalation**: A record, visible in the Review_UI, that stops a change at one Pipeline_State and holds the changeId, the Pipeline_State, the runId, the error text, the attempt count, and the allowed Escalation_Resolutions.
@@ -57,13 +62,12 @@ Terms reused from earlier specs keep the meaning defined there.
 - **Build_Failure_Category**: The failure class reported by the cht-config-compiler or the build-test-sandbox: `infrastructure` (the tooling or host failed with the logic unchanged) or `build_or_test` (the compile, the `cht-conf` build, or a synthetic-patient test failed).
 - **Tooling_Retry**: A rebuild of the same approved snapshotHash, starting again at Compile, under the existing content approval.
 - **Logic_Change**: The Escalation_Resolution that returns a change to `draft` so that a Revision with a new snapshotHash goes through content approval again.
-- **History_Flag**: One advisory flag produced by History_Check, with an identifier.
+- **History_Flag**: One advisory, high-severity flag that the Rejected_Rule_Check (rejected-rule-check spec) returns for a Rule matching a previously rejected Rule, with an identifier. A History_Flag never blocks a Pipeline_State.
 - **Rollback_Request**: A request from the Review_UI naming a change in `deployed` and a target snapshotHash to redeploy.
 - **Changes table**, **Approvals table**, **Audit table**, **Tokens table**: The DynamoDB tables listed in §14, each with partition key `changeId`.
 - **Approved snapshotHash**: The snapshotHash named in the change's recorded `approve` entry at Content_Approval.
 - **Worker_Call_Timeout**: The longest time the State_Machine waits for one worker call attempt to return a result: 900 seconds.
 - **Transient_Error**: A worker call outcome in which the Worker_API cannot be reached, the worker process stops before returning a result, or the worker returns an error it marks as retryable. Failures reported with a Build_Failure_Category or by the cht-deployer are not Transient_Errors.
-- **History_Check_Failure_Notice**: The record stored on a change when History_Check returns an Agent_Failure, holding the error and the runId, and shown at Deploy_Approval in place of History_Flags (Requirement 10.3).
 - **Decision_Log prefix**: The Artifact_Bucket prefix that holds one object per Decision_Log entry.
 
 ## Requirements
@@ -78,11 +82,11 @@ Terms reused from earlier specs keep the meaning defined there.
 2. WHEN the Review_UI submits a Start_Request that passes the checks in criterion 11 and whose Start_Request_Id no Changes table item records, THE Pipeline_Orchestrator SHALL create a changeId that no other Changes table item holds and a new runId, and write one Changes table item for the changeId that records the Start_Request_Id, the request type, the Tenant, and the Author in Lifecycle_State `draft`.
 3. WHEN the Pipeline_Orchestrator has written the Changes table item for a new changeId, THE Pipeline_Orchestrator SHALL start exactly one Execution whose input holds the changeId, the runId, the Tenant, the Author, and the request type, and return the changeId to the Review_UI.
 4. IF a Start_Request carries the same Start_Request_Id, request type, Tenant, and Author as an earlier or concurrent Start_Request, THEN THE Pipeline_Orchestrator SHALL return the one changeId recorded for that Start_Request_Id, create no second changeId, and start an Execution for that changeId only if no Execution has yet started for it.
-5. THE State_Machine SHALL begin every Execution at Intake and run the Pipeline_States in the order Intake, Draft, Logic_Checks, Content_Approval, Compile, Build_Test, History_Check, Deploy_Approval, Deploy, skipping no Pipeline_State other than an Optional_State disabled in the Pipeline_Configuration and returning to an earlier Pipeline_State only through the loops defined in Requirements 7, 8, and 9.
+5. THE State_Machine SHALL begin every Execution at Intake and run the Pipeline_States in the order Intake, Draft, Logic_Checks, Content_Approval, Compile, Build_Test, Deploy_Approval, Deploy, skipping no Pipeline_State and returning to an earlier Pipeline_State only through the loops defined in Requirements 7, 8, and 9.
 6. THE State_Machine SHALL choose each next Pipeline_State only from the State_Machine definition, the Pipeline_Configuration read at Execution start, and the outcome reported for the current Pipeline_State, without reading a next-state name or instruction from any Agent_Result.
 7. WHEN the State_Machine enters a Pipeline_State other than an Approval_Gate, THE State_Machine SHALL call that Pipeline_State's worker only through the Worker_API, assigning the call a Worker_Call_Id that no earlier worker call holds.
 8. WHEN the State_Machine enters Draft for a change whose Start_Request type is plain-language edit, THE State_Machine SHALL invoke the Change Planner Agent, pass the resulting ChangePlan to the Change_Plan_Applier, and invoke no Drafting agent for that Draft run.
-9. WHERE the Pipeline_Configuration read at Execution start sets History_Check to disabled, THE State_Machine SHALL pass from Build_Test directly to Deploy_Approval without calling the History_Check worker.
+9. *Removed (2026-11-04): the History_Check Pipeline_State no longer exists. The State_Machine passes from Build_Test directly to Deploy_Approval.*
 10. THE Pipeline_Orchestrator SHALL permit starting an Execution of the State_Machine and resuming a parked task token only for calls made under the Review_UI service identity, denying both operations to every agent role, worker role, and other identity.
 11. IF a Start_Request has a missing or empty Tenant or Author, a Start_Request_Id that is missing, empty, or longer than 128 characters, or a request type other than guideline upload, pathway pick, or plain-language edit, THEN THE Pipeline_Orchestrator SHALL refuse the Start_Request with an error naming each missing or invalid field, write no Changes table item, and start no Execution.
 12. IF the Execution for a new changeId fails to start, THEN THE Pipeline_Orchestrator SHALL return to the Review_UI the changeId and an error indicating that the change did not start, keeping the Changes table item in Lifecycle_State `draft` so that a repeat of the same Start_Request starts the Execution under criterion 4.
@@ -166,7 +170,7 @@ Terms reused from earlier specs keep the meaning defined there.
 3. IF an Approval_Decision has an absent or empty approver identity, an absent or empty approver Cognito group, or a decision value other than exactly `approve` or `reject`, THEN THE Pipeline_Orchestrator SHALL refuse the decision.
 4. IF an `approve` decision at Content_Approval carries an approver Cognito group other than `clinician` or `program_reviewer`, or an `approve` decision at Deploy_Approval carries an approver Cognito group other than `it_deploy`, THEN THE Pipeline_Orchestrator SHALL refuse the decision.
 5. IF the approver identity of an `approve` decision equals the Author recorded on the Snapshot named by the Parked_Token's snapshotHash, or equals the approver identity of any `approve` entry in the Approvals table at the other Approval_Gate for the same changeId, THEN THE Pipeline_Orchestrator SHALL refuse the decision.
-6. WHERE History_Check is enabled in the Pipeline_Configuration, IF an `approve` decision at Deploy_Approval lacks an acknowledgment naming the identifier of each History_Flag stored on the change, or carries an acknowledgment naming an identifier that matches no History_Flag stored on the change, THEN THE Pipeline_Orchestrator SHALL refuse the decision.
+6. IF an `approve` decision at Deploy_Approval lacks an acknowledgment naming the identifier of each History_Flag stored on the change, or carries an acknowledgment naming an identifier that matches no History_Flag stored on the change, THEN THE Pipeline_Orchestrator SHALL refuse the decision.
 7. THE Pipeline_Orchestrator SHALL treat a recorded `approve` entry as satisfying an approval check only for the exact snapshotHash named in that entry and, for a Deploy_Approval entry, only for the exact Build_Record identifier named in that entry, and never for a Revision, a recomputed snapshotHash, or another Build_Record of the same changeId.
 8. IF the Pipeline_Orchestrator refuses an Approval_Decision under any of criteria 2 to 6, THEN THE Decision_Recorder SHALL write no Approvals table entry and append one Audit table entry holding the Parked_Token's changeId and Approval_Gate, the snapshotHash and Build_Record identifier carried by the decision, the approver identity, every check in criteria 2 to 6 that the decision failed, and the time.
 9. IF the Pipeline_Orchestrator refuses an Approval_Decision under any of criteria 2 to 6, THEN THE State_Machine SHALL keep the change's Lifecycle_State unchanged and park a new task token at the same Approval_Gate, with a Parked_Token holding the same changeId, snapshotHash, and Build_Record identifier as the Parked_Token that the refused decision resumed.
@@ -206,10 +210,10 @@ Terms reused from earlier specs keep the meaning defined there.
 
 #### Acceptance Criteria
 
-1. IF a worker returns an Agent_Failure at any Pipeline_State other than History_Check, THEN THE State_Machine SHALL make no automatic retry, keep the change at the current Pipeline_State with its Lifecycle_State unchanged, and raise an Escalation holding the changeId, the Pipeline_State, the runId, the Agent_Failure error text, and the attempt count.
+1. IF a worker returns an Agent_Failure at any Pipeline_State, THEN THE State_Machine SHALL make no automatic retry, keep the change at the current Pipeline_State with its Lifecycle_State unchanged, and raise an Escalation holding the changeId, the Pipeline_State, the runId, the Agent_Failure error text, and the attempt count.
 2. IF a worker call attempt returns no result within the Worker_Call_Timeout or ends in a Transient_Error, THEN THE State_Machine SHALL make a further attempt with the same Worker_Call_Id until an attempt ends without a timeout or Transient_Error or the number of attempts, counting the first, reaches the Pipeline_State's Retry_Limit read at Execution start.
 3. IF the attempt that reaches the Pipeline_State's Retry_Limit also times out or ends in a Transient_Error, THEN THE State_Machine SHALL keep the change at the current Pipeline_State with its Lifecycle_State unchanged and raise an Escalation holding the changeId, the Pipeline_State, the runId, the last error text, and the attempt count.
-4. IF the Pipeline_Configuration read at Execution start lacks a Retry_Limit for the Decision_Recorder or for any enabled Pipeline_State other than an Approval_Gate, lacks the Rebuild_Limit or the Deploy_Retry_Limit, or holds any of these limits as a value other than an integer from 1 to 10, THEN THE Pipeline_Orchestrator SHALL refuse to start the Execution and return an error to the Review_UI naming each invalid setting.
+4. IF the Pipeline_Configuration read at Execution start lacks a Retry_Limit for the Decision_Recorder or for any Pipeline_State other than an Approval_Gate, lacks the Rebuild_Limit or the Deploy_Retry_Limit, or holds any of these limits as a value other than an integer from 1 to 10, THEN THE Pipeline_Orchestrator SHALL refuse to start the Execution and return an error to the Review_UI naming each invalid setting.
 5. WHILE an Escalation is open, THE State_Machine SHALL keep the change at the escalated Pipeline_State with its Lifecycle_State unchanged and make no worker call for the change, across restarts of the services EC2 instance, the worker processes, and the Review_UI, until the Decision_Recorder records an Escalation_Resolution for that Escalation.
 6. WHEN the Decision_Recorder records a `retry_state` resolution, THE State_Machine SHALL re-run the escalated Pipeline_State with a new Worker_Call_Id and an attempt count starting again at 1, bounded by that Pipeline_State's Retry_Limit.
 7. WHEN the Decision_Recorder records a `submit_revision` resolution naming a stored Revision that passes the checks in Requirement 7.5, THE State_Machine SHALL run Logic_Checks on the Revision's snapshotHash as the next Pipeline_State without re-running Intake or Draft.
@@ -237,15 +241,15 @@ Terms reused from earlier specs keep the meaning defined there.
 12. WHEN the Pipeline_Orchestrator accepts a Tooling_Retry for a change in `built`, THE Pipeline_Orchestrator SHALL apply transition T8 before the State_Machine re-enters Compile.
 13. IF the cht-config-compiler or the build-test-sandbox reports a result for a snapshotHash other than the Approved snapshotHash, or the build-test-sandbox returns a Build_Record that lists no synthetic-patient test, THEN THE Pipeline_Orchestrator SHALL refuse the result, apply no transition, record the refusal in the Audit table, and raise an Escalation.
 
-### Requirement 10: History check and release-only deploy
+### Requirement 10: History flags and release-only deploy
 
-**User Story:** As a national IT lead, I want advisory history flags in front of me and preview builds kept out of deployment, so that I approve with full context and only release Snapshots reach the CHT instance.
+**User Story:** As a clinician and a national IT lead, I want advisory history flags in front of me and preview builds kept out of deployment, so that I approve with full context and only release Snapshots reach the CHT instance.
 
 #### Acceptance Criteria
 
-1. WHERE History_Check is enabled, WHEN the Pipeline_Orchestrator applies transition T7, THE State_Machine SHALL run History_Check for the change's Current snapshotHash and stored Build_Record identifier and store each resulting History_Flag with its identifier on the change, replacing any History_Flags stored for an earlier Build_Record of the same change.
-2. WHERE History_Check is enabled, WHEN History_Check returns its History_Flags, THE State_Machine SHALL proceed to Deploy_Approval for any count of History_Flags, including zero, without waiting for any human action before entering Deploy_Approval.
-3. WHERE History_Check is enabled, IF History_Check returns an Agent_Failure, THEN THE State_Machine SHALL store on the change a History_Check_Failure_Notice holding the Agent_Failure error and the runId, store zero History_Flags for the change, and proceed to Deploy_Approval without raising an Escalation, taking precedence over Requirement 8.1.
+1. WHEN the Logic_Checker Run for the Current snapshotHash completes, and again WHEN the Pipeline_Orchestrator opens Content_Approval, THE Pipeline_Orchestrator SHALL store on the change the History_Flags that the Rejected_Rule_Check returns for that snapshotHash, replacing any History_Flags stored for an earlier snapshotHash of the same change.
+2. THE State_Machine SHALL enter Content_Approval and Deploy_Approval for any count of History_Flags, including zero, and SHALL NOT block, fail, or retry any Pipeline_State because of a History_Flag (rejected-rule-check Requirement 5.1).
+3. WHEN the State_Machine enters Deploy_Approval, THE Pipeline_Orchestrator SHALL record in the Parked_Token the identifier of every History_Flag stored on the change, so that Requirement 5.6 can be checked against them.
 4. IF the State_Machine is about to enter Deploy_Approval or Deploy and the Snapshot_Service returns Designation `preview` for the change's Current snapshotHash, THEN THE Pipeline_Orchestrator SHALL refuse to enter Deploy_Approval or Deploy, refuse transitions T11, T12, and T14, park no Deploy_Approval task token, send no request to the cht-deployer, keep the change in its current Lifecycle_State, and record the refusal in the Audit table.
 5. WHEN the Decision_Recorder records an `approve` decision at Deploy_Approval, THE State_Machine SHALL apply transition T12 and then request the cht-deployer to deploy the Build_Record named in the Parked_Token, passing the Approved snapshotHash and the identifier of the Approvals table entry for that decision.
 6. WHEN the cht-deployer reports that both the upload and the verification succeeded for the Build_Record named in the deploy approval, THE Pipeline_Orchestrator SHALL apply transition T14.
