@@ -8,10 +8,11 @@
   "workspaces": [
     "packages/*",
     "schemas",
-    "agents/*"
+    "agents/*",
+    "workers/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && tsc --build",
+    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && tsc --build && npm run build --workspace @vera/worker-snapshot-registrar",
     "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json && npm run check --workspaces --if-present",
     "check": "npm run build && npm run typecheck",
     "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",

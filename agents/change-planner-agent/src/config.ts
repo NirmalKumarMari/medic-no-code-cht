@@ -15,7 +15,7 @@ export const config = {
       "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     escalationModelId:
       process.env.CHANGEPLAN_ESCALATION_MODEL_ID ??
-      "us.anthropic.claude-sonnet-4-5-20251001-v1:0",
+      "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     guardrailId: process.env.BEDROCK_GUARDRAIL_ID,
     guardrailVersion: process.env.BEDROCK_GUARDRAIL_VERSION,
     promptCaching: process.env.CHANGEPLAN_PROMPT_CACHING !== "false",

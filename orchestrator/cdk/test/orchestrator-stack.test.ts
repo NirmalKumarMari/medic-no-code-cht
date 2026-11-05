@@ -19,7 +19,10 @@ test("references the existing vera-workflow tables by default", () => {
   const json = JSON.stringify(synth().toJSON());
   assert.match(json, /table\/vera-workflow-Changes/);
   assert.match(json, /table\/vera-workflow-Tokens/);
-  assert.match(json, /"TOKENS_TABLE_NAME":"vera-workflow-Tokens"/);
+  assert.match(json, /table\/vera-workflow-Approvals/);
+  assert.match(json, /table\/vera-workflow-Audit/);
+  // The approval-wait Lambda resolves all four names through workflow-data's tablesFromEnvironment.
+  assert.match(json, /"WORKFLOW_TABLE_PREFIX":"vera-workflow"/);
   // No bare legacy names left over from this stack's old tables.
   assert.doesNotMatch(json, /table\/(Changes|Approvals|Audit|Tokens)"/);
 });
@@ -31,7 +34,8 @@ test("honours a custom table prefix", () => {
     tablePrefix: "vera-test",
   });
   const json = JSON.stringify(Template.fromStack(stack).toJSON());
-  assert.match(json, /"TOKENS_TABLE_NAME":"vera-test-Tokens"/);
+  assert.match(json, /"WORKFLOW_TABLE_PREFIX":"vera-test"/);
+  assert.match(json, /table\/vera-test-Tokens/);
   assert.throws(() => new OrchestratorStack(new App(), "Bad", { tablePrefix: "bad prefix!" }));
 });
 

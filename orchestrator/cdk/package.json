@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Step Functions orchestrator: pipeline state machine (using the existing vera-workflow tables) and the two Lambda glue functions that connect Step Functions to the HTTP-based worker containers.",
+  "description": "Step Functions orchestrator: pipeline state machine (using the existing vera-workflow tables and @vera/workflow-data approval waits) and the two Lambda glue functions that connect Step Functions to the HTTP-based worker containers.",
   "engines": {
     "node": ">=22"
   },
@@ -19,6 +19,7 @@
     "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/client-secrets-manager": "^3.1162.0",
     "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@vera/workflow-data": "file:../../packages/workflow-data",
     "aws-cdk-lib": "^2.165.0",
     "constructs": "^10.3.0"
   },

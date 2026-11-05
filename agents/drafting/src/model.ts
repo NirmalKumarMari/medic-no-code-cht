@@ -12,10 +12,14 @@ import {
  */
 export type ModelTier = "haiku" | "sonnet";
 
-/** Default `us.` cross-region inference profiles (us-west-2). Override via env/config. */
+/**
+ * Default `us.` cross-region inference profiles (us-west-2), the same as the
+ * Intake and Change Planner agents. IDs from the Amazon Bedrock model cards for
+ * Claude Haiku 4.5 and Claude Sonnet 4.5. Override via env/config.
+ */
 export const DEFAULT_MODEL_IDS: Record<ModelTier, string> = {
-  haiku: "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-  sonnet: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+  haiku: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  sonnet: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 };
 
 export interface ModelRequest {
