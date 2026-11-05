@@ -21,3 +21,5 @@ export {
 } from "./schema.js";
 export { diffLogic } from "./logicModel.js";
 export type { Tools } from "./tools.js";
+
+export { CHT_CONVENTIONS_PRIMER } from "./primer.js";

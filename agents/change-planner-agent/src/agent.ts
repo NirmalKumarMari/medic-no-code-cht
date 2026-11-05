@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import {
   BedrockRuntimeClient,
   ConverseCommand,
@@ -250,7 +251,9 @@ export async function runChangePlannerAgent(
     lastErrors = [];
     try {
       if (text.length > 120000) throw Error("Model output exceeds limit.");
-      const json: unknown = JSON.parse(text);
+      const trimmed = text.trim();
+      const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+      const json: unknown = JSON.parse(fenced?.[1] ?? trimmed);
       assertBounds(json);
       const candidate = ModelProposalSchema.parse(json);
       const original = (json as { proposedLogicModel: Record<string, unknown> })
@@ -287,6 +290,10 @@ export async function runChangePlannerAgent(
       break;
     } catch (e) {
       // Do not return model content or detected personal data in errors/logs.
+      if (e instanceof ZodError) {
+        lastErrors = e.issues.slice(0, 8).map(issue =>
+          `Invalid or missing field ${issue.path.join(".") || "proposal"} (${issue.code}).`);
+      }
       if (!lastErrors.length)
         lastErrors = [
           "Output must be JSON matching the requested schema, with no extra keys.",
@@ -315,7 +322,7 @@ export async function runChangePlannerAgent(
   }
   if (!parsed)
     throw new ChangePlannerAgentError(
-      "Proposal failed validation after the bounded repair attempts. Human clarification is required.",
+      `Proposal failed validation after the bounded repair attempts. ${lastErrors.join(" ")}`,
       "INVALID_MODEL_OUTPUT",
     );
   const snapshotId = ulid();

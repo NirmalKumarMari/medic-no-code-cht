@@ -1,13 +1,19 @@
-import type { LogicFlag } from '../types/logic-model';
-import Citation from './Citation';
+import type { LogicFlag } from "../types/logic-model";
+import Citation from "./Citation";
 
 // Everything the drafting step was unsure about, with its source passage (design
 // rule 7). An open ambiguity blocks approval; see ReviewPanel.
 
-const TYPE_TEXT = { ambiguity: 'Ambiguity', missing_input: 'Missing information' } as const;
+const TYPE_TEXT = {
+  ambiguity: "Ambiguity",
+  missing_input: "Missing information",
+  gap: "Guideline gap",
+  uncited_rule: "Uncited rule",
+  conflict: "Conflicting information",
+} as const;
 
 export function isOpenAmbiguity(flag: LogicFlag): boolean {
-  return flag.type === 'ambiguity' && !flag.resolved;
+  return flag.type === "ambiguity" && !flag.resolved;
 }
 
 export default function FlagsPanel({ flags }: { flags: LogicFlag[] }) {
@@ -19,11 +25,17 @@ export default function FlagsPanel({ flags }: { flags: LogicFlag[] }) {
       ) : (
         <ul className="checks">
           {flags.map((flag, i) => (
-            <li key={i} className={`check ${flag.resolved ? 'check-pass' : 'check-warning'}`}>
-              <span className="check-status">{flag.resolved ? 'Settled' : 'Open'}</span>
+            <li
+              key={i}
+              className={`check ${flag.resolved ? "check-pass" : "check-warning"}`}
+            >
+              <span className="check-status">
+                {flag.resolved ? "Settled" : "Open"}
+              </span>
               <div>
                 <strong>{TYPE_TEXT[flag.type] ?? flag.type}</strong>
                 <p>{flag.text}</p>
+                {flag.ruleId && <p>Rule: {flag.ruleId}</p>}
                 <p className="citation">
                   Guideline: <Citation source={flag.source} />
                 </p>

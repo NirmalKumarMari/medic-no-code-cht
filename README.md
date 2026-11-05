@@ -100,7 +100,13 @@ Agents run as **Strands Agents in containers on EC2**. They reach tools only thr
 - [infra/](infra/README.md): one CDK app with separate storage and workflow-data stack modules. All infrastructure definitions and CDK dependencies live at the repository root.
 - [packages/workflow-data](packages/workflow-data/README.md): four-table runtime repositories, fingerprint history, human decisions and callback recovery. [Status](packages/workflow-data/docs/STATUS.md), [integration contract](packages/workflow-data/docs/INTEGRATION.md).
 
-These are libraries/IaC and an internal callback worker. The UI, Cognito verifier, live state machine, model prompt/cache integration, compiler/harness and CHT deployment adapter must be connected by their owners. Local tests are not proof of a deployed end-to-end clinical workflow. The final pathway, real guideline, clinician-reviewed golden cases and real curated primer remain team decisions. Existing public sample files are optional development fixtures, not finalized clinical inputs.
+These are libraries/IaC and an internal callback worker. The review UI/API and Cognito verifier are supplied; live Cognito/runtime permissions, the state machine, model prompt/cache integration, compiler/harness and CHT deployment adapter still require their configured component integrations. Local tests are not proof of a deployed end-to-end clinical workflow. The final pathway, real guideline, clinician-reviewed golden cases and real curated primer remain team decisions. Existing public sample files are optional development fixtures, not finalized clinical inputs.
+
+## Connected review UI
+
+The existing [MVP UI](mvp-prototype/README.md) now connects through [review-api](packages/review-api/README.md) to the storage packages. Hand-authored drafts have immutable artifacts, optimistic version checks and audit events; actual workflow reviews use the existing hash-bound approval API. Shared browser-safe model/check code lives in `packages/review-model/`.
+
+For a local preview, run `npm ci`, `npm run review:local:setup`, then `npm run review:local:api`; in another terminal run `npm run ui:dev`. Open http://127.0.0.1:5173/. This uses isolated DynamoDB Local tables and local files. AWS mode requires the API's real Cognito/bucket/KMS/Guardrail configuration. Draft promotion into the actual pipeline remains the orchestrator's responsibility; no execution ARNs, waits or approvals are invented.
 
 ## Verify locally
 

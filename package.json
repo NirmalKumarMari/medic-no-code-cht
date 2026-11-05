@@ -9,10 +9,11 @@
     "packages/*",
     "schemas",
     "agents/*",
-    "workers/*"
+    "workers/*",
+    "mvp-prototype"
   ],
   "scripts": {
-    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && tsc --build && npm run build --workspace @vera/worker-snapshot-registrar",
+    "build": "npm run build --workspace @vera/artifact-storage && npm run build --workspace @vera/workflow-data && tsc --build && npm run build --workspace @vera/worker-snapshot-registrar && npm run build --workspace @vera/review-model && npm run build --workspace @vera/review-api && npm run build --workspace @vera/review-ui",
     "typecheck": "tsc --build --noEmit && tsc --noEmit -p tsconfig.infra.json && npm run check --workspaces --if-present",
     "check": "npm run build && npm run typecheck",
     "test": "npm run build && npm run test:agents && npm run test:infra && npm run test --workspaces --if-present",
@@ -28,15 +29,24 @@
     "synth:workflow": "cdk synth vera-workflow-data",
     "deploy:workflow": "cdk deploy vera-workflow-data --outputs-file workflow-outputs.json",
     "db:local:up": "docker compose -f packages/workflow-data/compose.yaml up -d",
-    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down"
+    "db:local:down": "docker compose -f packages/workflow-data/compose.yaml down",
+    "ui:dev": "npm run dev --workspace @vera/review-ui",
+    "api:dev": "npm run dev --workspace @vera/review-api",
+    "review:local:setup": "npm run build && npm run db:local:up && npm run local:setup --workspace @vera/review-api",
+    "review:local:api": "REVIEW_MODE=local npm run dev --workspace @vera/review-api"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-cloudformation": "^3.1161.0",
     "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.1161.0",
     "@aws-sdk/client-sts": "^3.1161.0",
+    "@smithy/protocol-http": "^5.6.2",
+    "@smithy/signature-v4": "^5.7.5",
     "@vera/artifact-storage": "0.1.0",
-    "@vera/workflow-data": "0.1.0"
+    "@vera/workflow-data": "0.1.0",
+    "fflate": "0.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

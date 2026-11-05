@@ -108,3 +108,9 @@ UI reads are tenant-scoped: `getChange`, `getSnapshot`, `listInbox`, `listDecisi
 ## Dependency check
 
 Run dependency audits from the repository root, which owns the shared workspace lockfile. CDK dependencies now belong only to the repository root. The root CDK development dependency bundles a `minimatch` version with moderate advisory [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). It is used only for local template synthesis; no untrusted glob input is accepted, and CDK is omitted from production installs. Track the upstream fix. Do not report a clean full development dependency audit.
+
+## Authoring drafts and connected UI
+
+`AuthoringRepository` supplies pre-workflow draft persistence for `@vera/review-api`. It uses `AUTHORING#META`, immutable `AUTHORING#VERSION#<requestId>` and idempotency receipt keys in Changes, with atomic Audit events. Only current metadata uses the existing inbox GSI under `<tenant>#authoring`. Full requirements/model/check bytes remain versioned artifact references. These keys cannot satisfy workflow `META`/snapshot/approval prerequisites, and no new table or GSI is needed.
+
+The review API uses the existing `WorkflowRepository` for actual review queues, verified snapshots and human decisions. See the [review API documentation](../review-api/README.md) for authorization, local preview, AWS configuration and the pipeline-promotion boundary.

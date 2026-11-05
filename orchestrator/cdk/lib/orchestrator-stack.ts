@@ -3,6 +3,8 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import type { Construct } from "constructs";
@@ -13,6 +15,7 @@ export interface OrchestratorStackProps extends StackProps {
    * the `tablePrefix` the root `infra/` WorkflowDataStack was deployed with.
    */
   tablePrefix?: string;
+  preview?: { bucketArn: string; keyArn: string; guardrailArn: string; workshopRoleArn: string };
   /**
    * How long each approval gate waits for a person, in days (default 30).
    * Sets both the workflow-data wait expiry and the Step Functions task
@@ -44,8 +47,9 @@ export interface OrchestratorStackProps extends StackProps {
  * advisory-only before DeployApproval.
  */
 export class OrchestratorStack extends Stack {
+  readonly stateMachine: sfn.StateMachine;
   constructor(scope: Construct, id: string, props: OrchestratorStackProps = {}) {
-    const { tablePrefix = "vera-workflow", approvalWaitDays = 30, ...stackProps } = props;
+    const { tablePrefix = "vera-workflow", approvalWaitDays = 30, preview, ...stackProps } = props;
     // Two gates must fit inside the 365-day execution timeout below.
     if (!Number.isInteger(approvalWaitDays) || approvalWaitDays < 1 || approvalWaitDays > 180) {
       throw new Error("approvalWaitDays must be a whole number from 1 to 180");
@@ -60,8 +64,13 @@ export class OrchestratorStack extends Stack {
     // Filled in at `cdk deploy` time (`--parameters intakeAgentUrl=...`),
     // not baked into the template, per the handover rule that nothing
     // hard-codes an endpoint.
+    const queue = preview && new sqs.Queue(this, "Ec2WorkQueue", {
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      visibilityTimeout: Duration.minutes(5),
+      retentionPeriod: Duration.days(1),
+    });
     const workerUrl = (name: string, description: string) =>
-      new CfnParameter(this, name, { type: "String", description }).valueAsString;
+      preview ? name : new CfnParameter(this, name, { type: "String", description }).valueAsString;
 
     const intakeAgentUrl = workerUrl("intakeAgentUrl", "Intake Agent POST /intake endpoint");
     const draftContextUrl = workerUrl(
@@ -73,7 +82,7 @@ export class OrchestratorStack extends Stack {
     // The Change Planner refuses non-loopback calls without its worker Bearer
     // token (WORKER_AUTH_TOKEN). The token lives in Secrets Manager; only this
     // ARN is in the template and the execution, never the token.
-    const changePlannerTokenSecretArn = new CfnParameter(this, "changePlannerTokenSecretArn", {
+    const changePlannerTokenSecretArn = preview ? undefined : new CfnParameter(this, "changePlannerTokenSecretArn", {
       type: "String",
       description: "Secrets Manager secret ARN whose SecretString is the Change Planner's WORKER_AUTH_TOKEN",
     }).valueAsString;
@@ -85,12 +94,12 @@ export class OrchestratorStack extends Stack {
       "snapshotRegistrarUrl",
       "Snapshot registrar worker POST /register endpoint (workers/snapshot-registrar)",
     );
-    const snapshotRegistrarTokenSecretArn = new CfnParameter(this, "snapshotRegistrarTokenSecretArn", {
+    const snapshotRegistrarTokenSecretArn = preview ? undefined : new CfnParameter(this, "snapshotRegistrarTokenSecretArn", {
       type: "String",
       description: "Secrets Manager secret ARN whose SecretString is the snapshot registrar's WORKER_AUTH_TOKEN",
     }).valueAsString;
     // The CHT instance a deploy approval targets (workflow-data openApprovalWait `targetId`).
-    const chtTargetId = new CfnParameter(this, "chtTargetId", {
+    const chtTargetId = preview ? "vera-preview-artifacts" : new CfnParameter(this, "chtTargetId", {
       type: "String",
       allowedPattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
       description: "Identifier of the CHT target instance that deploy approvals are bound to",
@@ -107,7 +116,7 @@ export class OrchestratorStack extends Stack {
 
     // ---- Lambda glue (small event glue only — design doc's disallow list
     // explicitly permits this, and nothing else runs application logic here).
-    const invokeWorkerFn = new nodejs.NodejsFunction(this, "InvokeWorkerFn", {
+    const invokeWorkerFn = !preview && new nodejs.NodejsFunction(this, "InvokeWorkerFn", {
       entry: "lambda/invoke-worker/index.ts",
       handler: "handler",
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -115,7 +124,7 @@ export class OrchestratorStack extends Stack {
       memorySize: 256,
     });
 
-    const requestApprovalFn = new nodejs.NodejsFunction(this, "RequestApprovalFn", {
+    const requestApprovalFn = !preview && new nodejs.NodejsFunction(this, "RequestApprovalFn", {
       entry: "lambda/request-approval/index.ts",
       handler: "handler",
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -132,36 +141,56 @@ export class OrchestratorStack extends Stack {
     // rejected-rule history, then one transaction that writes the WAIT token,
     // updates the change and appends an audit event.
     // Least privilege: no Scan, no DeleteItem, no write to Approvals.
+    if (requestApprovalFn) {
     changesTable.grant(requestApprovalFn, "dynamodb:GetItem", "dynamodb:UpdateItem");
     tokensTable.grant(requestApprovalFn, "dynamodb:GetItem", "dynamodb:PutItem");
     approvalsTable.grant(requestApprovalFn, "dynamodb:Query");
     auditTable.grant(requestApprovalFn, "dynamodb:PutItem");
+    }
+    if (invokeWorkerFn) {
     // invoke-worker reads ONLY the workers' Bearer tokens, nothing else.
     secretsmanager.Secret.fromSecretCompleteArn(
       this,
       "ChangePlannerTokenSecret",
-      changePlannerTokenSecretArn,
+      changePlannerTokenSecretArn!,
     ).grantRead(invokeWorkerFn);
     secretsmanager.Secret.fromSecretCompleteArn(
       this,
       "SnapshotRegistrarTokenSecret",
-      snapshotRegistrarTokenSecretArn,
+      snapshotRegistrarTokenSecretArn!,
     ).grantRead(invokeWorkerFn);
+    }
+    const workerTask = (name: string, workerUrl: string, body: unknown, resultPath: string, authSecretArn?: string, timeout = Duration.minutes(4)) => {
+      if (queue) return new tasks.SqsSendMessage(this, name, {
+        queue,
+        integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+        messageBody: sfn.TaskInput.fromObject({
+          operation: workerUrl,
+          body,
+          token: sfn.JsonPath.taskToken,
+          executionArn: sfn.JsonPath.stringAt("$$.Execution.Id"),
+          runId: sfn.JsonPath.stringAt("$$.Execution.Name"),
+          request: sfn.JsonPath.objectAt("$.request"),
+          preview: sfn.JsonPath.objectAt("$.preview"),
+        }),
+        taskTimeout: sfn.Timeout.duration(timeout),
+        resultPath,
+      });
+      if (!invokeWorkerFn) throw Error("Worker transport is required");
+      return new tasks.LambdaInvoke(this, name, {
+        lambdaFunction: invokeWorkerFn,
+        payload: sfn.TaskInput.fromObject({ workerUrl, body, ...(authSecretArn ? { authSecretArn } : {}) }),
+        payloadResponseOnly: true,
+        resultPath,
+      });
+    };
 
     // ---- Helper to build a plain worker-call task (no approval wait).
     // The worker gets the whole `$` and its JSON reply is stored at
     // `resultPath`, so it can never drop `$.intake` or earlier results (the
     // reject loop-backs route on `$.intake.output.requestKind`).
     const callWorker = (name: string, url: string, resultPath: string) =>
-      new tasks.LambdaInvoke(this, name, {
-        lambdaFunction: invokeWorkerFn,
-        payload: sfn.TaskInput.fromObject({
-          workerUrl: url,
-          body: sfn.JsonPath.objectAt("$"),
-        }),
-        payloadResponseOnly: true, // the worker's own JSON, not the Lambda envelope
-        resultPath,
-      });
+      workerTask(name, url, sfn.JsonPath.objectAt("$"), resultPath);
 
     // ---- Helper for an agent-envelope call. The worker gets the shared
     // AgentRequest { changeId, runId, tenant, payload } and answers 200 with an
@@ -174,22 +203,12 @@ export class OrchestratorStack extends Stack {
       payload: unknown,
       resultPath: string,
       authSecretArn?: string,
-    ) =>
-      new tasks.LambdaInvoke(this, name, {
-        lambdaFunction: invokeWorkerFn,
-        payload: sfn.TaskInput.fromObject({
-          workerUrl: url,
-          ...(authSecretArn ? { authSecretArn } : {}),
-          body: {
-            changeId: sfn.JsonPath.stringAt("$.changeId"),
-            runId: sfn.JsonPath.stringAt("$$.Execution.Name"),
-            tenant: sfn.JsonPath.stringAt("$.tenant"),
-            payload,
-          },
-        }),
-        payloadResponseOnly: true, // the AgentResult itself, not the Lambda envelope
-        resultPath,
-      });
+    ) => workerTask(name, url, {
+      changeId: sfn.JsonPath.stringAt("$.changeId"),
+      runId: sfn.JsonPath.stringAt("$$.Execution.Name"),
+      tenant: sfn.JsonPath.stringAt("$.tenant"),
+      payload,
+    }, resultPath, authSecretArn);
 
     // ---- Helper to build an approval-wait task.
     //
@@ -201,8 +220,16 @@ export class OrchestratorStack extends Stack {
     // workflow-data callback dispatcher resumes this task with its
     // CallbackPayload { changeId, snapshotHash, gate, decisionId, decision, notes? },
     // which is stored at `resultPath`; the rest of `$` is untouched.
-    const waitForApproval = (name: string, gate: "content" | "deploy", resultPath: string) =>
-      new tasks.LambdaInvoke(this, name, {
+    const waitForApproval = (name: string, gate: "content" | "deploy", resultPath: string) => {
+      const body = {
+        changeId: sfn.JsonPath.stringAt("$.changeId"),
+        tenant: sfn.JsonPath.stringAt("$.tenant"),
+        gate,
+        snapshotHash: sfn.JsonPath.stringAt("$.snapshot.output.snapshotHash"),
+      };
+      if (queue) return workerTask(name, "approval", body, resultPath, undefined, Duration.days(approvalWaitDays));
+      if (!requestApprovalFn) throw Error("Approval transport is required");
+      return new tasks.LambdaInvoke(this, name, {
         lambdaFunction: requestApprovalFn,
         integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
         payload: sfn.TaskInput.fromObject({
@@ -217,6 +244,7 @@ export class OrchestratorStack extends Stack {
         taskTimeout: sfn.Timeout.duration(Duration.days(approvalWaitDays)),
         resultPath,
       });
+    };
 
     // ---- States.
     //
@@ -314,16 +342,7 @@ export class OrchestratorStack extends Stack {
       pathway: sfn.JsonPath.stringAt("$.intake.output.pathway"),
     };
     const registerTask = (name: string, body: Record<string, unknown>) => {
-      const task = new tasks.LambdaInvoke(this, name, {
-        lambdaFunction: invokeWorkerFn,
-        payload: sfn.TaskInput.fromObject({
-          workerUrl: snapshotRegistrarUrl,
-          authSecretArn: snapshotRegistrarTokenSecretArn,
-          body: { ...registerCommon, ...body },
-        }),
-        payloadResponseOnly: true,
-        resultPath: "$.snapshot",
-      });
+      const task = workerTask(name, snapshotRegistrarUrl, { ...registerCommon, ...body }, "$.snapshot", snapshotRegistrarTokenSecretArn);
       // 503: workflow-data is still finalizing the previous decision's callback.
       task.addRetry({ errors: ["WorkerBusy"], interval: Duration.seconds(3), maxAttempts: 5, backoffRate: 2 });
       return task;
@@ -352,7 +371,7 @@ export class OrchestratorStack extends Stack {
       error: "LogicChecksFailed",
       cause: "Logic checks did not pass for the registered snapshotHash; the report is at $.logicChecks in the execution history",
     });
-    const succeeded = new sfn.Succeed(this, "ChangeDeployed");
+    const succeeded = new sfn.Succeed(this, preview ? "PreviewArtifactReleased" : "ChangeDeployed");
 
     // Agent failures (ok: false) end the run with the agent's own failure message
     // for a person to read; nothing is retried or guessed here.
@@ -514,8 +533,8 @@ export class OrchestratorStack extends Stack {
     const deployApproved = gateDecision("DeployApproved", "deploy", "$.deployApproval", deployTask);
 
     const buildFailedLogicMustChange = new sfn.Choice(this, "LogicMustChange")
-      .when(sfn.Condition.booleanEquals("$.buildTest.logicMustChange", true), routeByRequestKind)
-      .otherwise(buildTestTask); // compiler/infra bug, logic unchanged: rebuild the SAME hash (design doc 6/#7)
+      .when(sfn.Condition.booleanEquals("$.buildTest.logicMustChange", true), preview ? new sfn.Fail(this, "PreviewTestFailed", { error: "PreviewTestFailed" }) : routeByRequestKind)
+      .otherwise(preview ? new sfn.Fail(this, "PreviewBuildFailed", { error: "PreviewBuildFailed" }) : buildTestTask); // compiler/infra bug, logic unchanged: rebuild the SAME hash (design doc 6/#7)
 
     const buildPassed = new sfn.Choice(this, "BuildPassed")
       .when(sfn.Condition.booleanEquals("$.buildTest.passed", true), deployApprovalTask)
@@ -531,16 +550,41 @@ export class OrchestratorStack extends Stack {
 
     const definition = sfn.Chain.start(intakeTask);
 
-    const stateMachine = new sfn.StateMachine(this, "PipelineStateMachine", {
-      stateMachineName: "medic-nocode-pipeline",
+    const stateMachine = this.stateMachine = new sfn.StateMachine(this, "PipelineStateMachine", {
+      stateMachineName: preview ? "vera-preview-pipeline" : "medic-nocode-pipeline",
       definitionBody: sfn.DefinitionBody.fromChainable(definition),
       // Step Functions standard maximum; each approval gate has its own shorter timeout.
       timeout: Duration.days(365),
       tracingEnabled: true,
     });
 
-    changesTable.grantReadWriteData(stateMachine);
-    tokensTable.grantReadWriteData(stateMachine);
+    if (preview && queue) {
+      const role = new iam.Role(this, "PreviewEc2Role", {
+        assumedBy: new iam.ArnPrincipal(preview.workshopRoleArn),
+      });
+      queue.grantConsumeMessages(role);
+      stateMachine.grantStartExecution(role);
+      stateMachine.grantRead(role);
+      stateMachine.grantTaskResponse(role);
+      for (const table of [changesTable, approvalsTable, auditTable, tokensTable]) {
+        role.addToPolicy(new iam.PolicyStatement({
+          actions: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:ConditionCheckItem", "dynamodb:Query"],
+          resources: [table.tableArn, `${table.tableArn}/index/*`],
+        }));
+      }
+      role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"], resources: [`${preview.bucketArn}/*`] }));
+      role.addToPolicy(new iam.PolicyStatement({ actions: ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"], resources: [preview.keyArn] }));
+      role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:ApplyGuardrail"], resources: [preview.guardrailArn] }));
+      role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel"], resources: [
+        this.formatArn({ service: "bedrock", resource: "inference-profile", resourceName: "us.anthropic.claude-*" }),
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
+      ] }));
+      new CfnOutput(this, "WorkQueueUrl", { value: queue.queueUrl });
+      new CfnOutput(this, "WorkerRoleArn", { value: role.roleArn });
+    } else {
+      changesTable.grantReadWriteData(stateMachine);
+      tokensTable.grantReadWriteData(stateMachine);
+    }
 
     new CfnOutput(this, "StateMachineArn", { value: stateMachine.stateMachineArn });
     // Table names/ARNs are output by the workflow-data stack that owns them.

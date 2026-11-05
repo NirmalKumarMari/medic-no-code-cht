@@ -1,63 +1,46 @@
-# Medic No-Code CHT — MVP Prototype
+# Vera authoring and content review UI
 
-A small, **stubbed, visualize-only** UI prototype for the Medic no-code CHT
-solution. It is kept separate from the real system we will build on top of it.
+The existing structured prototype is connected to the review API and storage packages. It saves hand-authored drafts, restores them after refresh, saves immutable revisions, shows activity and opens the real content-review queue. Flowchart/table/checks still come from the same deterministic model. The browser carries no AWS credentials and has no direct database/S3 access.
 
-- **No AI and no backend.** The "generate" step (`src/data/stubGenerator.ts`)
-  turns the form's answers into a logic model and fakes a short delay.
-- The automatic checks (`src/data/checks.ts`) are real, deterministic code, as
-  in the design doc: they run on every version, and a problem blocks approval.
-- Colours follow Medic's palette from `cht-core`, darkened where needed to meet
-  WCAG 2.2 AA contrast.
-- Accessibility: labelled fields, an error summary that links to each field,
-  keyboard support, focus moved to each new screen, a skip link, and a
-  flowchart built from HTML so screen readers can read it.
+## Local preview
 
-## The flow
+Requires Node 22+ and Docker. Install from the repository root using the shared lockfile:
 
-1. **Describe the change.** Pathway and guideline, the questions the health
-   worker answers, the rules (checked top to bottom, first match wins), and
-   what happens if no rule matches. Required fields are marked `*`.
-   **Fill in an example** loads an illustrative child cough and fast breathing
-   pathway. It is not clinical guidance.
-2. **Generate.** The stub builds a versioned logic model.
-3. **Review.** Automatic checks, then the logic as a flowchart or a decision
-   table. **Approve**, or **Reject and edit** (a note is required). Each
-   regeneration is a new version.
-4. **Approved.** A confirmation, the approved logic, and the steps that would
-   follow in the full system.
-
-## Run it
-
-Requires Node 18 or later (developed on Node 24).
-
-```bash
-cd mvp-prototype
-npm install
-npm run dev          # http://localhost:5173/
+```sh
+npm ci
+npm run review:local:setup
+npm run review:local:api
 ```
 
-In the workshop environment, where the app is reached through the CloudFront
-proxy, run `npm run dev:proxy` instead and open
-`https://<your-cloudfront-host>/absproxy/5173/` (keep the trailing slash).
+In another terminal at the repository root:
 
-```bash
-npm run build        # type-check and production build into dist/
-npm run preview      # serve the production build
-npm test             # test the checks (needs Node 22.15 or later, no install)
+```sh
+npm run ui:dev
 ```
 
-## Code map
+Open http://127.0.0.1:5173/. The local API runs on loopback port 3001. **Fill in an example** supplies an illustrative synthetic pathway; choose **Save draft and show flowchart**, refresh and reopen it, then edit/save version 2. The local banner names DynamoDB Local and local files explicitly. No AWS records or fabricated clinical approvals are created. `npm run db:local:down` removes the disposable in-memory local database when finished.
 
-| Path | What it is |
-| --- | --- |
-| `src/types/logic-model.ts` | The logic model (design doc section 10) |
-| `src/types/draft.ts` | What the form edits |
-| `src/data/stubGenerator.ts` | Stubbed drafting step: form answers to logic model |
-| `src/data/checks.ts` | Deterministic logic checks, run against every distinct case |
-| `src/data/evaluate.ts` | Evaluates rules and builds the grid of test cases |
-| `src/data/audit.ts` | Blocks approval of anything the screen cannot show faithfully |
-| `src/components/ExprView.tsx` | Shows a rule's condition, however deeply nested |
-| `src/data/validate.ts` | Form validation messages |
-| `src/data/drafts.ts` | Empty drafts and the example pathway |
-| `src/components/` | Screens and UI pieces |
+## AWS connection
+
+Configure/start `@vera/review-api` with its real bucket/KMS/Guardrail, Cognito public-client PKCE settings and server-owned tenant memberships. See [API configuration and routes](../packages/review-api/README.md). Serve the static UI and `/api` on one HTTPS origin through the existing EC2/reverse proxy setup, or use Session Manager forwarding. All infrastructure remains in root `infra/`; this change deploys nothing.
+
+For the workshop's CloudFront proxy, run `npm run dev:proxy --workspace @vera/review-ui` from the root and open `https://<your-cloudfront-host>/absproxy/5173/`. The API's allowed origins and Cognito callback/sign-out URLs must match that exact browser origin/path. Vite proxies both `/api` and the workshop-prefixed API path to port 3001.
+
+## Review behavior
+
+- Authoring drafts are stored before pipeline registration. Their integrity hash verifies file bytes; it is distinct from the workflow snapshot hash.
+- Only actual `content_review` workflows expose decision controls, with the existing server-side identity/role/author separation, exact hash binding and idempotent decision/outbox transaction.
+- Stored validation reports, history flags and decisions come from the backend. Conditions/actions unsupported by this narrower renderer keep approval disabled and show raw snapshot data instead.
+- Saving or deciding shows success only after the server confirms persistence. Failures preserve the form/note and retries reuse the request ID. A 401 clears the authenticated view.
+- AI invocation, promotion into a workflow with real evidence/execution/toolchain identity, build/test, deployment review and live CHT deployment remain with their component owners. This connection does not invent those integrations or present preview checks as clinical build evidence.
+
+## Checks
+
+From the root:
+
+```sh
+npm run check
+npm test  # DynamoDB Local must be running
+```
+
+`npm run build` also creates the production UI in `mvp-prototype/dist/`. The prototype's existing deterministic-check suite remains under `test/`; database-backed API tests live in `packages/review-api/tests/`. Browser-safe model/check/form code now lives in `packages/review-model/`, with the old `src/data/` and `src/types/` paths re-exporting it for component compatibility.

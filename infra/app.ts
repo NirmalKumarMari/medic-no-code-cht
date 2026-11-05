@@ -17,3 +17,9 @@ new WorkflowDataStack(
     tablePrefix: process.env.WORKFLOW_TABLE_PREFIX,
   },
 );
+
+// Opt-in identity/worker access stack; existing storage/table stack identities are preserved.
+if (process.env.INCLUDE_REVIEW_ACCESS === "1") {
+  const { ReviewAccessStack } = await import("./review-access-stack.js");
+  new ReviewAccessStack(app, "VeraReviewAccess", { env });
+}

@@ -107,15 +107,17 @@ export function SelectField({ value, onChange, options, placeholder, ...base }: 
 }
 
 interface TextAreaFieldProps extends BaseProps {
+  disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
   rows?: number;
 }
 
-export function TextAreaField({ value, onChange, rows = 3, ...base }: TextAreaFieldProps) {
+export function TextAreaField({ value, onChange, rows = 3, disabled, ...base }: TextAreaFieldProps) {
   return (
     <FieldShell {...base}>
       <textarea
+        disabled={disabled}
         id={base.id}
         rows={rows}
         value={value}
