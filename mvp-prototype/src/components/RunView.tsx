@@ -281,11 +281,6 @@ export default function RunView({
           {run.stage ? `, ${run.stage}` : ""}
           {run.error ? `, ${run.error}` : ""}
         </p>
-        {run.snapshotHash && (
-          <p className="version-id">
-            Version ID: <code>{run.snapshotHash}</code>
-          </p>
-        )}
         {run.buildId && (
           <p className="version-id">
             Build: <code>{run.buildId}</code>

@@ -127,7 +127,7 @@ export default function App() {
       if (n === operation.current) fail(e);
     }
   }
-  async function open(kind: "drafts" | "reviews", changeId: string, from: Tab) {
+  async function open(kind: "drafts" | "reviews", changeId: string, from: Tab, fromLink = false) {
     const n = ++operation.current;
     setBusy(true);
     setError("");
@@ -153,7 +153,11 @@ export default function App() {
       );
     } catch (e) {
       if (n === operation.current) {
-        fail(e);
+        if (e instanceof ApiError && e.status === 404) {
+          // An old link in the address bar isn't something the person did, so just clear it.
+          if (!fromLink) setError("This change isn't available. Choose one from the list.");
+          history.replaceState(null, "", import.meta.env.BASE_URL);
+        } else fail(e);
         setTab(from);
       }
     } finally {
@@ -206,11 +210,23 @@ export default function App() {
         const id = params.get("draft") ?? params.get("review");
         const runId = params.get("run");
         if (runId && c.pipeline) {
-          setRun({ id: runId, from: home });
-          setTab("run");
+          void api(`pipeline/${runId}`).then(
+            () => {
+              setRun({ id: runId, from: home });
+              setTab("run");
+            },
+            (e) => {
+              if (e instanceof ApiError && e.status === 404)
+                history.replaceState(null, "", import.meta.env.BASE_URL);
+              else {
+                setRun({ id: runId, from: home });
+                setTab("run");
+              }
+            },
+          );
           void loadLists();
         } else if (id)
-          void open(params.has("draft") ? "drafts" : "reviews", id, home).then(loadLists);
+          void open(params.has("draft") ? "drafts" : "reviews", id, home, true).then(loadLists);
         else void loadLists();
       })
       .catch(async (e) => {

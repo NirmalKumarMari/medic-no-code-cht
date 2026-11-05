@@ -131,9 +131,6 @@ export default function ChangeHistoryPanel({ initialChangeId }: { initialChangeI
           )}
           <details className="json-details">
             <summary>Technical details</summary>
-            <p className="version-id">
-              Version ID: <code>{history.current.snapshotHash}</code>
-            </p>
             <pre>{JSON.stringify({ snapshots: history.snapshots, records: timeline }, null, 2)}</pre>
           </details>
         </div>

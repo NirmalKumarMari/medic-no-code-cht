@@ -148,11 +148,6 @@ export default function ReviewPanel({
               Send back
             </button>
           </div>
-          {model.snapshotHash && (
-            <p className="version-id">
-              Version ID: <code>{model.snapshotHash}</code>
-            </p>
-          )}
         </section>
       )}
 
@@ -164,11 +159,6 @@ export default function ReviewPanel({
 
       <details className="json-details technical">
         <summary>Technical details</summary>
-        {model.snapshotHash && !canDecide && (
-          <p className="version-id">
-            Version ID: <code>{model.snapshotHash}</code>
-          </p>
-        )}
         <pre role="region" aria-label="Rule data" tabIndex={0}>
           {JSON.stringify(model, null, 2)}
         </pre>
