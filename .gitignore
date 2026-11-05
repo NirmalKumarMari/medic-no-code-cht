@@ -166,3 +166,8 @@ workflow-outputs.json
 
 # Workshop production build
 mvp-prototype/dist-workshop/
+
+# Reviewed workshop resource configuration only; other environment files stay ignored.
+!/packages/review-api/.env.aws
+!/packages/review-api/.env.ec2.aws
+!/scripts/.env.gateway.aws

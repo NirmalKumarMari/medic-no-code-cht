@@ -26,7 +26,9 @@ Use **Fill in an example**, then **Save draft and show flowchart**. Refresh or r
 
 ## AWS configuration
 
-Copy `.env.example` to an ignored local file and fill in the real values. From the repository root after `npm run build`:
+The repository includes `.env.aws` for this workshop on a developer machine and `.env.ec2.aws` for the EC2 worker. These contain resource identifiers only; AWS credentials come from the SDK profile/instance role. The EC2 profile configuration file is provisioned separately and assumes the scoped worker role using EC2 metadata. `scripts/.env.gateway.aws` contains the EC2 gateway settings. Other environment files remain ignored.
+
+For another deployment, copy `.env.example` to an ignored local file and fill in the real values. From the repository root after `npm run build`:
 
 ```sh
 node --env-file=packages/review-api/.env packages/review-api/dist/server.js
